@@ -1,0 +1,18 @@
+apiVersion: dev.optura.io/v1
+kind: ServiceDevConfig
+metadata:
+  name: workshop
+spec:
+  service:
+    kubernetesService: workshop
+    containerPort: 3000
+    localPort: 5173
+    protocol: http
+  run:
+    command: npm run dev -- --port 5173
+    dockerfile: Dockerfile
+    rebuildOn:
+      - package.json
+      - package-lock.json
+  deploy:
+    mode: helm

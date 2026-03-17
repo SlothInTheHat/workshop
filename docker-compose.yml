@@ -1,0 +1,19 @@
+services:
+  workshop:
+    build:
+      context: .
+      args:
+        COMMIT_SHA: ${COMMIT_SHA:-local}
+        BUILD_DATE: ${BUILD_DATE:-}
+        APP_VERSION: ${APP_VERSION:-0.0.1}
+        NPM_TOKEN: ${NPM_TOKEN}
+    image: workshop:local
+    ports:
+      - '3001:3000'
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    restart: unless-stopped
