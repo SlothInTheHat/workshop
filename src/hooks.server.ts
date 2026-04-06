@@ -1,3 +1,5 @@
-import { createAuthHandle } from '@optura-ai/agent-ui-kit/auth';
+import type { Handle } from '@sveltejs/kit';
 
-export const handle = createAuthHandle();
+export const handle: Handle = async ({ event, resolve }) => {
+	return resolve(event);
+};

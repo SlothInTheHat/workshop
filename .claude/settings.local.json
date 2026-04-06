@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.optura.ai)",
+      "Bash(npx svelte-check:*)"
+    ]
+  }
+}
