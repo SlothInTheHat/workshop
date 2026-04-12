@@ -11,7 +11,6 @@
     initializeTheme();
   });
 
-  // Live and setup pages manage their own full-screen layouts
   const isFullScreen = $derived(
     $page.url.pathname.includes('/live') || $page.url.pathname.includes('/setup')
   );
@@ -20,11 +19,10 @@
 {#if isFullScreen}
   {@render children()}
 {:else}
-  <div class="min-h-screen bg-[#FAFAF9]" style="font-family: Inter, sans-serif;">
-    <!-- Top Nav -->
-    <nav class="h-16 bg-[#fafafa] border-b border-[#E5E2DD] px-6 flex items-center justify-between sticky top-0 z-20">
-      <a href="/" class="flex items-center hover:opacity-80 transition-opacity">
-        <span class="text-[18px] font-bold text-gray-900 tracking-tight">optura</span>
+  <div class="min-h-screen bg-[#f5f5f0]" style="font-family: Inter, sans-serif;">
+    <nav class="h-16 bg-[#fbfbfb] border-b border-gray-200 px-6 flex items-center justify-between sticky top-0 z-50">
+      <a href="/" class="flex items-center hover:opacity-80 transition-opacity ml-2">
+        <img src="/optura-logo.png" alt="Optura" class="h-10" />
       </a>
 
       <div class="flex items-center gap-1">

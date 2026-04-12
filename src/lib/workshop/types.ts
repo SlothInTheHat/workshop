@@ -17,6 +17,7 @@ export interface Workshop {
   status: WorkshopStatus;
   createdAt: string;
   agenda: AgendaItem[];
+  finishedVoting?: Set<string>;
 }
 
 export interface Participant {
@@ -58,6 +59,7 @@ export interface UseCase {
   collaborators: string[];
   crossTeamOverlap?: string;
   insightId: string;
+  whyItMatters?: string;
 }
 
 export interface Insight {
@@ -78,15 +80,56 @@ export interface Insight {
   similarTo?: string;
 }
 
+export interface Score {
+  id: string;
+  workshopId: string;
+  useCaseId: string;
+  scoredBy: string;
+  impact: number;
+  feasibility: number;
+  alignment: number;
+  executiveWeight: number;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface Promotion {
+  id: string;
+  workshopId: string;
+  useCaseId: string;
+  promotedBy: string;
+  targetType: 'pipeline' | 'mvbc';
+  promotedAt: string;
+}
+
+export interface RankedUseCase extends UseCase {
+  finalScore: number;
+  impactAvg: number;
+  feasibilityAvg: number;
+  alignmentAvg: number;
+  executiveWeightAvg: number;
+  scoreCount: number;
+}
+
+export interface WorkshopSummary {
+  id: string;
+  workshopId: string;
+  content: string;
+  generatedAt: string;
+}
+
 export type WorkshopEventType =
   | 'usecase_added'
   | 'usecase_updated'
   | 'usecase_upvoted'
   | 'usecase_deleted'
+  | 'usecase_scored'
+  | 'usecase_promoted'
   | 'team_created'
   | 'team_updated'
   | 'team_deleted'
   | 'insight_generated'
+  | 'summary_generated'
   | 'participant_joined'
   | 'participant_left';
 

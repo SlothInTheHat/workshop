@@ -1,0 +1,1 @@
+ALTER TABLE "use_cases" ADD COLUMN "why_it_matters" text;

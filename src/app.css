@@ -2,4 +2,7 @@
 @import '@optura-ai/agent-ui-kit/theme';
 @import '@optura-ai/agent-ui-kit/theme/components';
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 /* Project-specific overrides below */
