@@ -1,0 +1,1 @@
+ALTER TABLE "workshops" ADD COLUMN "finished_voting" jsonb DEFAULT '[]';

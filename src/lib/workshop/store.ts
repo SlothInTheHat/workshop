@@ -7,6 +7,10 @@ import type {
   Insight,
   WorkshopEvent,
   WorkshopEventType,
+  Score,
+  Promotion,
+  RankedUseCase,
+  WorkshopSummary,
 } from './types.js';
 
 // ── In-memory stores ──────────────────────────────────────────────────────────
@@ -16,6 +20,9 @@ export const teams = new Map<string, BreakoutTeam>();
 export const participants = new Map<string, Participant>();
 export const useCases = new Map<string, UseCase>();
 export const insights = new Map<string, Insight>();
+export const scores = new Map<string, Score>();
+export const promotions = new Map<string, Promotion>();
+export const summaries = new Map<string, WorkshopSummary>();
 
 // SSE: workshopId -> Set of controller enqueue functions
 type Enqueuer = (event: WorkshopEvent) => void;
@@ -249,6 +256,143 @@ export function deleteUseCase(useCaseId: string): boolean {
   return true;
 }
 
+// ── Post-Workshop functions ───────────────────────────────────────────────────
+
+export function addScore(input: {
+  workshopId: string;
+  useCaseId: string;
+  scoredBy: string;
+  impact: number;
+  feasibility: number;
+  alignment: number;
+  executiveWeight: number;
+  notes?: string;
+}): Score {
+  // Check if this user has already scored this use case
+  const existingScores = [...scores.values()].filter(
+    (s) => s.useCaseId === input.useCaseId && s.scoredBy === input.scoredBy
+  );
+
+  let score: Score;
+  if (existingScores.length > 0) {
+    // Update existing score
+    const existing = existingScores[0];
+    score = {
+      ...existing,
+      impact: input.impact,
+      feasibility: input.feasibility,
+      alignment: input.alignment,
+      executiveWeight: input.executiveWeight,
+      notes: input.notes,
+    };
+    scores.set(existing.id, score);
+  } else {
+    // Create new score
+    score = {
+      id: randomUUID(),
+      workshopId: input.workshopId,
+      useCaseId: input.useCaseId,
+      scoredBy: input.scoredBy,
+      impact: input.impact,
+      feasibility: input.feasibility,
+      alignment: input.alignment,
+      executiveWeight: input.executiveWeight,
+      notes: input.notes,
+      createdAt: new Date().toISOString(),
+    };
+    scores.set(score.id, score);
+  }
+
+  broadcast(input.workshopId, 'usecase_scored', score);
+  return score;
+}
+
+export function getScoresByUseCaseId(useCaseId: string): Score[] {
+  return [...scores.values()].filter((s) => s.useCaseId === useCaseId);
+}
+
+export function getScoresByWorkshopId(workshopId: string): Score[] {
+  return [...scores.values()].filter((s) => s.workshopId === workshopId);
+}
+
+export function promoteUseCase(
+  useCaseId: string,
+  promotedBy: string,
+  targetType: 'pipeline' | 'mvbc'
+): Promotion {
+  const uc = useCases.get(useCaseId);
+  if (!uc) throw new Error('Use case not found');
+
+  const promotion: Promotion = {
+    id: randomUUID(),
+    workshopId: uc.workshopId,
+    useCaseId,
+    promotedBy,
+    targetType,
+    promotedAt: new Date().toISOString(),
+  };
+  promotions.set(promotion.id, promotion);
+
+  broadcast(uc.workshopId, 'usecase_promoted', promotion);
+  return promotion;
+}
+
+export function getPromotionsByWorkshopId(workshopId: string): Promotion[] {
+  return [...promotions.values()].filter((p) => p.workshopId === workshopId);
+}
+
+export function calculateStackRank(workshopId: string): RankedUseCase[] {
+  const workshopUseCases = getWorkshopUseCases(workshopId);
+
+  const ranked: RankedUseCase[] = workshopUseCases.map((uc) => {
+    const ucScores = getScoresByUseCaseId(uc.id);
+
+    let impactAvg = 0;
+    let feasibilityAvg = 0;
+    let alignmentAvg = 0;
+    let executiveWeightAvg = 0;
+    const scoreCount = ucScores.length;
+
+    if (scoreCount > 0) {
+      impactAvg = ucScores.reduce((sum, s) => sum + s.impact, 0) / scoreCount;
+      feasibilityAvg = ucScores.reduce((sum, s) => sum + s.feasibility, 0) / scoreCount;
+      alignmentAvg = ucScores.reduce((sum, s) => sum + s.alignment, 0) / scoreCount;
+      executiveWeightAvg = ucScores.reduce((sum, s) => sum + s.executiveWeight, 0) / scoreCount;
+    }
+
+    const finalScore = (impactAvg * feasibilityAvg) + (2 * uc.upvotes) + executiveWeightAvg;
+
+    return {
+      ...uc,
+      finalScore,
+      impactAvg,
+      feasibilityAvg,
+      alignmentAvg,
+      executiveWeightAvg,
+      scoreCount,
+    };
+  });
+
+  return ranked.sort((a, b) => b.finalScore - a.finalScore);
+}
+
+export function saveSummary(workshopId: string, content: string): WorkshopSummary {
+  const summary: WorkshopSummary = {
+    id: randomUUID(),
+    workshopId,
+    content,
+    generatedAt: new Date().toISOString(),
+  };
+  summaries.set(workshopId, summary);
+
+  broadcast(workshopId, 'summary_generated', summary);
+  return summary;
+}
+
+export function getSummary(workshopId: string): WorkshopSummary | null {
+  return summaries.get(workshopId) ?? null;
+}
+
 // ── Seed data ─────────────────────────────────────────────────────────────────
 
 function seed(): void {
@@ -293,10 +437,6 @@ function seed(): void {
 
   for (const uc of seedCases) {
     const { useCase } = createUseCase(uc);
-    // Add some upvotes to seeded cards
-    const mockVoters = [pSarah.id, pMichael.id, pJamie.id];
-    const voteCount = Math.floor(Math.random() * 4);
-    for (let i = 0; i < voteCount; i++) upvoteUseCase(useCase.id, mockVoters[i]);
   }
 }
 
