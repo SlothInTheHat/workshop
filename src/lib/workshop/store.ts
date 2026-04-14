@@ -5,6 +5,7 @@ import type {
   Participant,
   UseCase,
   Insight,
+  Comment,
   WorkshopEvent,
   WorkshopEventType,
 } from './types.js';
@@ -16,6 +17,7 @@ export const teams = new Map<string, BreakoutTeam>();
 export const participants = new Map<string, Participant>();
 export const useCases = new Map<string, UseCase>();
 export const insights = new Map<string, Insight>();
+export const comments = new Map<string, Comment[]>(); // useCaseId -> comments
 
 // SSE: workshopId -> Set of controller enqueue functions
 type Enqueuer = (event: WorkshopEvent) => void;
@@ -52,6 +54,71 @@ export function getWorkshopUseCases(workshopId: string, teamId?: string): UseCas
 
 export function getWorkshopInsights(workshopId: string): Insight[] {
   return [...insights.values()].filter((i) => i.workshopId === workshopId);
+}
+
+export function getComments(useCaseId: string): Comment[] {
+  return comments.get(useCaseId) ?? [];
+}
+
+export function createComment(input: {
+  useCaseId: string;
+  participantId: string;
+  authorName: string;
+  authorInitials: string;
+  authorColor: string;
+  content: string;
+  workshopId: string;
+}): Comment {
+  const comment: Comment = {
+    id: randomUUID(),
+    useCaseId: input.useCaseId,
+    participantId: input.participantId,
+    authorName: input.authorName,
+    authorInitials: input.authorInitials,
+    authorColor: input.authorColor,
+    content: input.content,
+    createdAt: new Date().toISOString(),
+  };
+  const existing = comments.get(input.useCaseId) ?? [];
+  comments.set(input.useCaseId, [...existing, comment]);
+
+  // Increment comment count on the use case
+  const uc = useCases.get(input.useCaseId);
+  if (uc) useCases.set(input.useCaseId, { ...uc, commentCount: (uc.commentCount ?? 0) + 1 });
+
+  broadcast(input.workshopId, 'comment_added', { useCaseId: input.useCaseId, comment });
+  return comment;
+}
+
+export function createParticipant(input: {
+  id: string;
+  workshopId: string;
+  name: string;
+  role: string;
+  initials: string;
+  color: string;
+  teamId: string;
+}): Participant {
+  const participant: Participant = {
+    id: input.id,
+    workshopId: input.workshopId,
+    name: input.name,
+    role: input.role,
+    presence: 'remote',
+    teamId: input.teamId,
+    initials: input.initials,
+    color: input.color,
+  };
+  participants.set(input.id, participant);
+
+  // Add to team
+  const team = teams.get(input.teamId);
+  if (team && !team.memberIds.includes(input.id)) {
+    teams.set(input.teamId, { ...team, memberIds: [...team.memberIds, input.id] });
+  }
+
+  broadcast(input.workshopId, 'participant_joined', participant);
+  return participant;
 }
 
 // ── Mutations ─────────────────────────────────────────────────────────────────
@@ -154,7 +221,7 @@ export function createUseCase(input: {
     position: input.position ?? { x: Math.floor(Math.random() * 600), y: Math.floor(Math.random() * 400) },
     upvotes: 0,
     upvotedBy: [],
-    comments: 0,
+    commentCount: 0,
     collaborators: input.collaborators ?? [input.addedBy],
     insightId,
   };

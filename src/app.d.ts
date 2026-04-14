@@ -1,13 +1,12 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
-
-import type { AuthUser } from '@optura-ai/agent-ui-kit/auth';
+import type { User, Session } from 'lucia';
 
 declare global {
   namespace App {
     // interface Error {}
     interface Locals {
-      user: AuthUser | undefined;
-      accessToken: string | undefined;
+      user: User | null;
+      session: Session | null;
     }
     // interface PageData {}
     // interface PageState {}

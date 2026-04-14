@@ -18,14 +18,350 @@
   let isNavCollapsed = $state(false);
   let zoom = $state(1);
   let aiInput = $state('');
+  let aiStreaming = $state(false);
   let selectedCluster = $state<number | null>(null);
-  let showAddModal = $state(false);
+
+  // AI semantic clusters (workshop-wide view)
+  interface AiCluster { theme: string; useCaseIds: string[] }
+  let aiClusters = $state<AiCluster[]>([]);
+  let aiClusterLoading = $state(false);
+  let clusteredCardPositions = $state<Record<string, { x: number; y: number }>>({});
+
+  interface AiMessage {
+    role: 'user' | 'assistant';
+    content: string;
+  }
+  interface UsecasePreview {
+    title: string;
+    summary: string;
+    value: 'High' | 'Medium' | 'Low';
+    viability: 'High' | 'Medium' | 'Low';
+  }
+
+  // ── AI sessions (one per card + one for creation) ────────────────────────────
+  type AiSession = { messages: AiMessage[]; preview: UsecasePreview | null };
+  const sessionStore: Record<string, AiSession> = {};
+  let activeSessionId = $state('new');
+  let aiMessages = $state<AiMessage[]>([]);
+  let aiPreview = $state<UsecasePreview | null>(null);
+  let aiCreationMode = $state(false);
+
+  function saveSession() {
+    sessionStore[activeSessionId] = { messages: [...aiMessages], preview: aiPreview };
+  }
+
+  // Auto-populate form when AI generates a preview during creation
+  $effect(() => {
+    if (aiCreationMode && aiPreview) {
+      newTitle = aiPreview.title;
+      newSummary = aiPreview.summary;
+      newValue = aiPreview.value;
+      newViability = aiPreview.viability;
+    }
+  });
+  function loadSession(id: string, primeMessage?: string) {
+    saveSession();
+    activeSessionId = id;
+    const saved = sessionStore[id];
+    aiMessages = saved ? [...saved.messages] : (primeMessage ? [{ role: 'assistant' as const, content: primeMessage }] : []);
+    aiPreview = saved?.preview ?? null;
+  }
+
+  // ── AI semantic clustering ────────────────────────────────────────────────────
+
+  function computeClusterLayout(clusters: AiCluster[]) {
+    const CARD_W = 256, CARD_H = 240;
+    const GAP_X = 20, GAP_Y = 20;
+    const PAD_X = 36, PAD_TOP = 52, PAD_BOT = 28;
+    const CLUSTER_GAP = 64;
+    const CANVAS_MAX_W = 1400;
+
+    const pos: Record<string, { x: number; y: number }> = {};
+    let cx = 40, cy = 80, rowH = 0;
+
+    for (const cluster of clusters) {
+      const n = cluster.useCaseIds.length;
+      const cols = Math.min(Math.max(1, Math.ceil(Math.sqrt(n))), 3);
+      const rows = Math.ceil(n / cols);
+      const cW = PAD_X * 2 + cols * CARD_W + (cols - 1) * GAP_X;
+      const cH = PAD_TOP + PAD_BOT + rows * CARD_H + (rows - 1) * GAP_Y;
+
+      if (cx > 40 && cx + cW > CANVAS_MAX_W) {
+        cx = 40; cy += rowH + CLUSTER_GAP; rowH = 0;
+      }
+
+      cluster.useCaseIds.forEach((id, idx) => {
+        const col = idx % cols;
+        const row = Math.floor(idx / cols);
+        pos[id] = {
+          x: cx + PAD_X + col * (CARD_W + GAP_X),
+          y: cy + PAD_TOP + row * (CARD_H + GAP_Y),
+        };
+      });
+
+      cx += cW + CLUSTER_GAP;
+      rowH = Math.max(rowH, cH);
+    }
+
+    clusteredCardPositions = pos;
+  }
+
+  async function fetchAiClusters() {
+    if (cards.length === 0) return;
+    aiClusterLoading = true;
+    aiClusters = [];
+    clusteredCardPositions = {};
+    try {
+      const res = await fetch(`/api/workshop/${workshopId}/ai-cluster`, { method: 'POST' });
+      if (res.ok) {
+        const { clusters } = await res.json() as { clusters: AiCluster[] };
+        aiClusters = clusters;
+        computeClusterLayout(clusters);
+      }
+    } catch (err) {
+      console.error('cluster error', err);
+    } finally {
+      aiClusterLoading = false;
+    }
+  }
+
+  // ── Card selection / edit ──────────────────────────────────────────────────
+  let selectedCardId = $state<string | null>(null);
+  let editTitle = $state('');
+  let editSummary = $state('');
+  let editValue = $state<'High' | 'Medium' | 'Low'>('High');
+  let editViability = $state<'High' | 'Medium' | 'Low'>('Medium');
+  let editVisibility = $state<'Internal' | 'Restricted' | 'Cross-Silo'>('Internal');
+  let savingEdit = $state(false);
+
+  // Drag vs click detection
+  let dragStartPos = { x: 0, y: 0 };
+  let didDrag = false;
+
+  // Comment drawer
+  interface Comment {
+    id: string;
+    useCaseId: string;
+    participantId: string;
+    authorName: string;
+    authorInitials: string;
+    authorColor: string;
+    content: string;
+    createdAt: string;
+  }
+  let commentCardId = $state<string | null>(null);
+  let commentList = $state<Comment[]>([]);
+  let commentInput = $state('');
+  let commentLoading = $state(false);
+  let commentPosting = $state(false);
+
+  // Team selection (first visit)
+  let joiningTeam = $state(false);
+
+  async function sendAiMessage() {
+    const text = aiInput.trim();
+    if (!text || aiStreaming) return;
+    aiInput = '';
+    aiMessages = [...aiMessages, { role: 'user', content: text }];
+    aiStreaming = true;
+    aiPreview = null;
+
+    let assistantContent = '';
+    aiMessages = [...aiMessages, { role: 'assistant', content: '' }];
+
+    try {
+      const body: Record<string, unknown> = {
+        message: text,
+        history: aiMessages.slice(0, -1),
+      };
+      // Pass useCaseId when in a card-specific session
+      if (activeSessionId !== 'new') body.useCaseId = activeSessionId;
+
+      const res = await fetch(`/api/workshop/${workshopId}/ai`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.body) throw new Error('No response body');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6);
+          if (payload === '[DONE]') break;
+          const chunk = JSON.parse(payload) as { text: string };
+          assistantContent += chunk.text;
+          // Update the last message live
+          aiMessages = [
+            ...aiMessages.slice(0, -1),
+            { role: 'assistant', content: assistantContent },
+          ];
+        }
+      }
+
+      // Parse usecase_preview if present
+      const previewMatch = assistantContent.match(/<usecase_preview>([\s\S]*?)<\/usecase_preview>/);
+      if (previewMatch) {
+        try {
+          aiPreview = JSON.parse(previewMatch[1].trim()) as UsecasePreview;
+        } catch {
+          // ignore parse errors
+        }
+      }
+    } catch (err) {
+      console.error('AI error', err);
+      aiMessages = [
+        ...aiMessages.slice(0, -1),
+        { role: 'assistant', content: 'Sorry, something went wrong. Please try again.' },
+      ];
+    } finally {
+      aiStreaming = false;
+    }
+  }
+
+  function applyAiPreview() {
+    if (!aiPreview) return;
+    if (selectedCardId) {
+      // Edit mode — apply to the edit form and save
+      editTitle = aiPreview.title;
+      editSummary = aiPreview.summary;
+      editValue = aiPreview.value;
+      editViability = aiPreview.viability;
+      aiPreview = null;
+      saveCardEdit();
+    } else {
+      // Create mode — fields already auto-populated by $effect; just dismiss preview card
+      aiPreview = null;
+    }
+  }
+
+  function openAiCreate() {
+    aiCreationMode = true;
+    selectedCardId = null;
+    newTitle = '';
+    newSummary = '';
+    newValue = 'High';
+    newViability = 'Medium';
+    newVisibility = 'Internal';
+    loadSession('new', "Let's capture a new use case. What problem or opportunity are you thinking about?");
+  }
+
+  function selectCard(card: UseCase) {
+    selectedCardId = card.id;
+    editTitle = card.title;
+    editSummary = card.summary;
+    editValue = card.value;
+    editViability = card.viability;
+    editVisibility = card.visibility;
+    aiCreationMode = false;
+    isAiCollapsed = false;
+    const prime = `I'm looking at **${card.title}** — ${card.summary}. What would you like to change or improve?`;
+    loadSession(card.id, prime);
+  }
+
+  function deselectCard() {
+    selectedCardId = null;
+    saveSession();
+    loadSession('new');
+  }
+
+  async function saveCardEdit() {
+    if (!selectedCardId || savingEdit) return;
+    savingEdit = true;
+    try {
+      const res = await fetch(`/api/workshop/${workshopId}/usecases/${selectedCardId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          summary: editSummary.trim(),
+          value: editValue,
+          viability: editViability,
+          visibility: editVisibility,
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        cards = cards.map(c => c.id === selectedCardId ? { ...c, ...updated } : c);
+        deselectCard();
+      }
+    } finally {
+      savingEdit = false;
+    }
+  }
+
+  async function openComments(cardId: string) {
+    commentCardId = cardId;
+    commentList = [];
+    commentLoading = true;
+    try {
+      const res = await fetch(`/api/workshop/${workshopId}/usecases/${cardId}/comments`);
+      if (res.ok) commentList = await res.json();
+    } finally {
+      commentLoading = false;
+    }
+  }
+
+  async function postComment() {
+    if (!commentInput.trim() || !commentCardId || commentPosting) return;
+    commentPosting = true;
+    try {
+      const res = await fetch(`/api/workshop/${workshopId}/usecases/${commentCardId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: commentInput.trim() }),
+      });
+      if (res.ok) {
+        const comment = await res.json();
+        commentList = [...commentList, comment];
+        commentInput = '';
+        cards = cards.map(c => c.id === commentCardId ? { ...c, commentCount: (c.commentCount ?? 0) + 1 } : c);
+      }
+    } finally {
+      commentPosting = false;
+    }
+  }
+
+  async function joinTeam(teamId: string) {
+    joiningTeam = true;
+    try {
+      const res = await fetch(`/api/workshop/${workshopId}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId }),
+      });
+      if (res.ok) {
+        const participant = await res.json();
+        me = participant;
+        // Refresh participants list
+        const r = await fetch(`/api/workshop/${workshopId}`);
+        if (r.ok) {
+          const overview = await r.json();
+          participants = overview.participants ?? participants;
+          teams = overview.teams ?? teams;
+        }
+      }
+    } finally {
+      joiningTeam = false;
+    }
+  }
 
   // Live data from server, mutated in real time via SSE
   let cards = $state<UseCase[]>(data.usecases ?? []);
   let teams = $state<BreakoutTeam[]>(data.teams ?? []);
   let participants = $state<Participant[]>(data.participants ?? []);
   let me = $state<Participant | null>(data.me ?? null);
+  const currentUser = $derived(data.currentUser);
 
   // New use case form
   let newTitle = $state('');
@@ -101,6 +437,38 @@
     });
   });
 
+  // Derived bounding boxes for AI semantic clusters
+  const aiClusterRects = $derived(() => {
+    if (!aiClusters.length) return [];
+    const CARD_W = 256, CARD_H = 240, PAD = 28;
+    const palette = [
+      { color: 'rgba(107,150,149,0.08)', borderColor: 'rgba(107,150,149,0.3)', labelColor: '#6B9695' },
+      { color: 'rgba(99,179,135,0.08)', borderColor: 'rgba(99,179,135,0.3)', labelColor: '#38A169' },
+      { color: 'rgba(99,122,179,0.08)', borderColor: 'rgba(99,122,179,0.3)', labelColor: '#5A6FBA' },
+      { color: 'rgba(229,159,60,0.08)', borderColor: 'rgba(229,159,60,0.3)', labelColor: '#B7791F' },
+      { color: 'rgba(199,97,97,0.08)', borderColor: 'rgba(199,97,97,0.3)', labelColor: '#C05252' },
+      { color: 'rgba(159,122,234,0.08)', borderColor: 'rgba(159,122,234,0.3)', labelColor: '#805AD5' },
+    ];
+    return aiClusters.map((cluster, i) => {
+      const positions = cluster.useCaseIds.map(id => clusteredCardPositions[id]).filter(Boolean) as { x: number; y: number }[];
+      if (!positions.length) return null;
+      const xs = positions.map(p => p.x);
+      const ys = positions.map(p => p.y);
+      const minX = Math.min(...xs) - PAD;
+      const minY = Math.min(...ys) - 44;
+      const maxX = Math.max(...xs) + CARD_W + PAD;
+      const maxY = Math.max(...ys) + CARD_H + PAD;
+      return {
+        id: i,
+        theme: cluster.theme,
+        count: cluster.useCaseIds.length,
+        useCaseIds: new Set(cluster.useCaseIds),
+        ...palette[i % palette.length],
+        rect: { x: minX, y: minY, w: maxX - minX, h: maxY - minY },
+      };
+    }).filter((c): c is NonNullable<typeof c> => c !== null);
+  });
+
   // ── Drag ──────────────────────────────────────────────────────────────────────
 
   function onCardMouseDown(e: MouseEvent, card: UseCase) {
@@ -108,6 +476,8 @@
     e.preventDefault();
     e.stopPropagation();
     draggingId = card.id;
+    dragStartPos = { x: e.clientX, y: e.clientY };
+    didDrag = false;
     const rect = canvasEl!.getBoundingClientRect();
     dragOffset = {
       x: (e.clientX - rect.left) / zoom - card.position.x,
@@ -116,7 +486,10 @@
   }
 
   function onCanvasMouseMove(e: MouseEvent) {
-    if (!draggingId || !canvasEl) return;
+    if (!draggingId || !canvasEl || viewMode === 'workshop-wide') return;
+    const dx = e.clientX - dragStartPos.x;
+    const dy = e.clientY - dragStartPos.y;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) didDrag = true;
     const rect = canvasEl.getBoundingClientRect();
     const x = (e.clientX - rect.left) / zoom - dragOffset.x;
     const y = (e.clientY - rect.top) / zoom - dragOffset.y;
@@ -126,8 +499,18 @@
   async function onCanvasMouseUp() {
     if (!draggingId) return;
     const id = draggingId;
+    const wasDrag = didDrag;
     draggingId = null;
-    // Persist position
+    didDrag = false;
+
+    if (!wasDrag) {
+      // Treat as click — open card for editing
+      const card = cards.find(c => c.id === id);
+      if (card) selectCard(card);
+      return;
+    }
+
+    // Persist position after drag
     const card = cards.find(c => c.id === id);
     if (card) {
       await fetch(`/api/workshop/${workshopId}/usecases/${id}`, {
@@ -163,41 +546,61 @@
     // Position near existing cards to avoid overlap
     const pos = { x: 80 + (cards.length % 4) * 220, y: 60 + Math.floor(cards.length / 4) * 240 };
 
-    const res = await fetch(`/api/workshop/${workshopId}/usecases`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: newTitle.trim(),
-        summary: newSummary.trim() || newTitle.trim(),
-        value: newValue,
-        viability: newViability,
-        visibility: newVisibility,
-        teamId: myTeam.id,
-        participantId: me.id,
-        position: pos,
-        collaborators: [me.name],
-      }),
-    });
+    try {
+      const res = await fetch(`/api/workshop/${workshopId}/usecases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newTitle.trim(),
+          summary: newSummary.trim() || newTitle.trim(),
+          value: newValue,
+          viability: newViability,
+          visibility: newVisibility,
+          teamId: myTeam.id,
+          participantId: me.id,
+          position: pos,
+          collaborators: [me.name],
+        }),
+      });
 
-    if (res.ok) {
-      const { useCase } = await res.json();
-      cards = [...cards, useCase];
-      newTitle = '';
-      newSummary = '';
-      newValue = 'High';
-      newViability = 'Medium';
-      newVisibility = 'Internal';
-      showAddModal = false;
+      if (res.ok) {
+        const body = await res.json();
+        const useCase = body.useCase ?? body;
+        if (!cards.find(c => c.id === useCase.id)) cards = [...cards, useCase];
+        newTitle = '';
+        newSummary = '';
+        newValue = 'High';
+        newViability = 'Medium';
+        newVisibility = 'Internal';
+        aiCreationMode = false;
+        aiPreview = null;
+        saveSession();
+        loadSession('new');
+      } else {
+        const errText = await res.text().catch(() => res.status.toString());
+        console.error('addUseCase failed', res.status, errText);
+      }
+    } catch (err) {
+      console.error('addUseCase error', err);
+    } finally {
+      addingUseCase = false;
     }
-    addingUseCase = false;
   }
 
   // ── View helpers ──────────────────────────────────────────────────────────────
 
   function switchView(mode: ViewMode) {
     viewMode = mode;
-    if (mode === 'workshop-wide') { zoom = 0.65; teamFilter = 'All Teams'; }
-    else { zoom = 1; teamFilter = 'Mine'; }
+    if (mode === 'workshop-wide') {
+      zoom = 0.65;
+      teamFilter = 'All Teams';
+      fetchAiClusters();
+    } else {
+      zoom = 1;
+      teamFilter = 'Mine';
+      aiClusters = [];
+      clusteredCardPositions = {};
+    }
     selectedCluster = null;
   }
 
@@ -263,6 +666,17 @@
       teams = teams.map(t => t.id === d.id ? { ...t, ...d } : t);
     } else if (event.type === 'team_deleted') {
       teams = teams.filter(t => t.id !== d.id);
+    } else if (event.type === 'comment_added') {
+      // Increment count on card
+      cards = cards.map(c => c.id === d.useCaseId ? { ...c, commentCount: (c.commentCount ?? 0) + 1 } : c);
+      // Append to open drawer
+      if (commentCardId === d.useCaseId) {
+        const alreadyHave = commentList.find(c => c.id === d.comment.id);
+        if (!alreadyHave) commentList = [...commentList, d.comment];
+      }
+    } else if (event.type === 'participant_joined') {
+      if (!participants.find(p => p.id === d.id)) participants = [...participants, d];
+      else participants = participants.map(p => p.id === d.id ? { ...p, ...d } : p);
     }
   }
 </script>
@@ -314,11 +728,13 @@
           <span class="font-medium text-gray-700">{me.name.split(' ')[0]} {me.name.split(' ')[1]}</span>
         </div>
       {/if}
-      <button onclick={() => showAddModal = true}
-        class="flex items-center gap-1.5 px-3 py-1.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[12px] font-medium transition-colors">
-        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Add Use Case
-      </button>
+      {#if viewMode !== 'workshop-wide'}
+        <button onclick={openAiCreate}
+          class="flex items-center gap-1.5 px-3 py-1.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[12px] font-medium transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Use Case
+        </button>
+      {/if}
       <button onclick={() => goto(`/workshop/${workshopId}/summary`)}
         class="px-3 py-1.5 bg-gray-800 text-white hover:bg-gray-900 rounded-lg text-[12px] font-medium transition-colors">
         Complete Workshop
@@ -420,10 +836,23 @@
       <!-- Workshop-wide banner -->
       {#if viewMode === 'workshop-wide'}
         <div class="absolute top-3 left-1/2 -translate-x-1/2 z-20">
-          <div class="flex items-center gap-2 px-4 py-2 bg-[#1E2A38] text-white rounded-lg shadow-md">
+          <div class="flex items-center gap-3 px-4 py-2 bg-[#1E2A38] text-white rounded-lg shadow-md">
             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6B9695" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             <span class="text-[12px] font-medium">Workshop Overview — {workshop?.title}</span>
-            <span class="text-[11px] text-gray-400 ml-2">{participants.length} participants · {cards.length} use cases · {teams.length} teams</span>
+            <span class="text-[11px] text-gray-400">{participants.length} participants · {cards.length} use cases · {teams.length} teams</span>
+            {#if aiClusterLoading}
+              <span class="flex items-center gap-1.5 text-[11px] text-[#6B9695]">
+                <svg class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                Clustering...
+              </span>
+            {:else if aiClusters.length > 0}
+              <span class="text-[11px] text-gray-400">{aiClusters.length} clusters</span>
+              <button onclick={fetchAiClusters}
+                class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 text-[11px] text-gray-300 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                Re-cluster
+              </button>
+            {/if}
           </div>
         </div>
       {/if}
@@ -433,39 +862,71 @@
 
         <!-- Cluster backgrounds (workshop view) -->
         {#if viewMode === 'workshop-wide'}
-          {#each workshopClusters() as cluster}
-            <div
-              class="absolute rounded-2xl transition-all duration-200 cursor-pointer"
-              style="
-                left: {cluster.rect.x}px; top: {cluster.rect.y}px;
-                width: {cluster.rect.w}px; height: {cluster.rect.h}px;
-                background: {selectedCluster === cluster.id ? cluster.color.replace('0.08', '0.14') : cluster.color};
-                border: 1.5px dashed {cluster.borderColor};
-                opacity: {selectedCluster !== null && selectedCluster !== cluster.id ? 0.3 : 1};
-              "
-              role="button" tabindex="0"
-              onclick={() => selectedCluster = selectedCluster === cluster.id ? null : cluster.id}
-              onkeydown={(e) => e.key === 'Enter' && (selectedCluster = selectedCluster === cluster.id ? null : cluster.id)}
-            >
-              <div class="absolute -top-5 left-3">
-                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold"
-                  style="background: {selectedCluster === cluster.id ? cluster.labelColor : 'white'}; color: {selectedCluster === cluster.id ? 'white' : cluster.labelColor}; border: 1.5px solid {cluster.borderColor}; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
-                  {cluster.label}
-                  <span class="text-[9px] px-1 rounded-full" style="background: rgba(255,255,255,0.25);">{cluster.count}</span>
-                </span>
+          {#if aiClusters.length > 0}
+            {#each aiClusterRects() as cluster}
+              <div
+                class="absolute rounded-2xl transition-all duration-200 cursor-pointer"
+                style="
+                  left: {cluster.rect.x}px; top: {cluster.rect.y}px;
+                  width: {cluster.rect.w}px; height: {cluster.rect.h}px;
+                  background: {selectedCluster === cluster.id ? cluster.color.replace('0.08', '0.14') : cluster.color};
+                  border: 1.5px dashed {cluster.borderColor};
+                  opacity: {selectedCluster !== null && selectedCluster !== cluster.id ? 0.3 : 1};
+                "
+                role="button" tabindex="0"
+                onclick={() => selectedCluster = selectedCluster === cluster.id ? null : cluster.id}
+                onkeydown={(e) => e.key === 'Enter' && (selectedCluster = selectedCluster === cluster.id ? null : cluster.id)}
+              >
+                {#if cluster.count > 1}
+                  <div class="absolute -top-5 left-3">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                      style="background: {selectedCluster === cluster.id ? cluster.labelColor : 'white'}; color: {selectedCluster === cluster.id ? 'white' : cluster.labelColor}; border: 1.5px solid {cluster.borderColor}; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                      {cluster.theme}
+                      <span class="text-[9px] px-1 rounded-full" style="background: rgba(255,255,255,0.25);">{cluster.count}</span>
+                    </span>
+                  </div>
+                {/if}
               </div>
-            </div>
-          {/each}
+            {/each}
+          {:else if !aiClusterLoading}
+            {#each workshopClusters() as cluster}
+              <div
+                class="absolute rounded-2xl transition-all duration-200 cursor-pointer"
+                style="
+                  left: {cluster.rect.x}px; top: {cluster.rect.y}px;
+                  width: {cluster.rect.w}px; height: {cluster.rect.h}px;
+                  background: {selectedCluster === cluster.id ? cluster.color.replace('0.08', '0.14') : cluster.color};
+                  border: 1.5px dashed {cluster.borderColor};
+                  opacity: {selectedCluster !== null && selectedCluster !== cluster.id ? 0.3 : 1};
+                "
+                role="button" tabindex="0"
+                onclick={() => selectedCluster = selectedCluster === cluster.id ? null : cluster.id}
+                onkeydown={(e) => e.key === 'Enter' && (selectedCluster = selectedCluster === cluster.id ? null : cluster.id)}
+              >
+                <div class="absolute -top-5 left-3">
+                  <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                    style="background: {selectedCluster === cluster.id ? cluster.labelColor : 'white'}; color: {selectedCluster === cluster.id ? 'white' : cluster.labelColor}; border: 1.5px solid {cluster.borderColor}; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                    {cluster.label}
+                    <span class="text-[9px] px-1 rounded-full" style="background: rgba(255,255,255,0.25);">{cluster.count}</span>
+                  </span>
+                </div>
+              </div>
+            {/each}
+          {/if}
         {/if}
 
         <!-- Use case cards -->
         {#each visibleCards() as card (card.id)}
-          {#if selectedCluster === null || workshopClusters().find(c => c.teamId === card.teamId)?.id === selectedCluster}
+          {@const cardPos = (viewMode === 'workshop-wide' && clusteredCardPositions[card.id]) ? clusteredCardPositions[card.id] : card.position}
+          {@const inSelectedCluster = selectedCluster === null || (viewMode === 'workshop-wide' && aiClusters.length > 0
+            ? aiClusterRects().find(c => c.useCaseIds.has(card.id))?.id === selectedCluster
+            : workshopClusters().find(c => c.teamId === card.teamId)?.id === selectedCluster)}
+          {#if inSelectedCluster}
             <div
               onmousedown={(e) => onCardMouseDown(e, card)}
               class="absolute bg-white rounded-xl border border-gray-200 p-4 w-64 shadow-md hover:shadow-lg group select-none"
               style="
-                left: {card.position.x}px; top: {card.position.y}px;
+                left: {cardPos.x}px; top: {cardPos.y}px;
                 cursor: {draggingId === card.id ? 'grabbing' : 'grab'};
                 z-index: {draggingId === card.id ? 20 : 1};
                 box-shadow: {draggingId === card.id ? '0 12px 32px rgba(0,0,0,0.18)' : ''};
@@ -521,10 +982,13 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
                     {card.upvotes}
                   </button>
-                  <span class="flex items-center gap-1 px-2 py-1 text-gray-500 text-[10px]">
+                  <button
+                    onmousedown={(e) => e.stopPropagation()}
+                    onclick={() => openComments(card.id)}
+                    class="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-gray-100 text-gray-500 text-[10px] transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                    {card.comments}
-                  </span>
+                    {card.commentCount ?? 0}
+                  </button>
                 </div>
                 <button onmousedown={(e) => e.stopPropagation()}
                   class="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-[#F0F9F9] text-[#6B9695] text-[10px] font-medium transition-colors">
@@ -568,8 +1032,15 @@
               <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6B9695" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
               <h3 class="text-[14px] text-gray-900 font-semibold">AI Analyst</h3>
             </div>
-            <p class="text-[11px] text-gray-500">
-              Analyzing {teamFilter === 'Mine' ? 'your workspace' : teamFilter === 'All Teams' ? 'all workspaces' : `${teamFilter} workspace`}...
+            <p class="text-[11px] {(aiCreationMode || selectedCardId) ? 'text-[#6B9695] font-medium' : 'text-gray-500'}">
+              {#if selectedCardId}
+                {@const c = cards.find(c => c.id === selectedCardId)}
+                Editing: {c?.title ?? 'use case'}
+              {:else if aiCreationMode}
+                Creating use case...
+              {:else}
+                Analyzing {teamFilter === 'Mine' ? 'your workspace' : teamFilter === 'All Teams' ? 'all workspaces' : `${teamFilter} workspace`}...
+              {/if}
             </p>
           </div>
           <button onclick={() => isAiCollapsed = true} class="p-1 hover:bg-gray-100 rounded-md transition-colors" title="Collapse">
@@ -577,67 +1048,88 @@
           </button>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-5 space-y-4">
-          <div class="flex justify-end">
-            <div class="bg-[#F5F3F0] rounded-xl rounded-tr-sm px-4 py-3 max-w-[85%]">
-              <p class="text-[13px] text-gray-900">We're seeing duplicate intake entries between Epic and the referral system.</p>
+        <div class="flex-1 overflow-y-auto p-5 space-y-4" id="ai-messages-container">
+          {#if aiMessages.length === 0}
+            <div class="text-center py-8">
+              <p class="text-[12px] text-gray-400 leading-relaxed">Describe a use case idea and I'll help you structure it into a card.</p>
             </div>
-          </div>
-          <div class="flex justify-start">
-            <div class="bg-[#F0F9F9] border border-[#6B9695]/20 rounded-xl rounded-tl-sm px-4 py-3 max-w-[85%]">
-              <p class="text-[13px] text-gray-900">Would you classify this as operational inefficiency or system integration gap?</p>
-            </div>
-          </div>
-          <div class="flex justify-end">
-            <div class="bg-[#F5F3F0] rounded-xl rounded-tr-sm px-4 py-3 max-w-[85%]">
-              <p class="text-[13px] text-gray-900">System integration gap</p>
-            </div>
-          </div>
-          <div class="bg-white border-2 border-[#6B9695] rounded-xl p-4 w-full">
-            <div class="flex items-center gap-2 mb-3">
-              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6B9695" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-              <span class="text-[11px] text-[#6B9695] font-semibold uppercase tracking-wide">Structured Preview</span>
-            </div>
-            <div class="space-y-2 mb-4">
-              <div>
-                <p class="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-0.5">Title</p>
-                <p class="text-[13px] text-gray-900 font-semibold">Intake Form Duplication</p>
-              </div>
-              <div>
-                <p class="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-0.5">Summary</p>
-                <p class="text-[12px] text-gray-700">Manual re-entry across EHR systems</p>
-              </div>
-              <div class="flex gap-3">
-                <div>
-                  <p class="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-0.5">Value</p>
-                  <span class="px-2 py-0.5 rounded-md text-[10px] border font-medium bg-red-50 text-red-700 border-red-200">High</span>
-                </div>
-                <div>
-                  <p class="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-0.5">Viability</p>
-                  <span class="px-2 py-0.5 rounded-md text-[10px] border font-medium bg-blue-50 text-blue-700 border-blue-200">Medium</span>
+          {/if}
+
+          {#each aiMessages as msg}
+            {#if msg.role === 'user'}
+              <div class="flex justify-end">
+                <div class="bg-[#F5F3F0] rounded-xl rounded-tr-sm px-4 py-3 max-w-[85%]">
+                  <p class="text-[13px] text-gray-900">{msg.content}</p>
                 </div>
               </div>
-              <div class="pt-2 border-t border-gray-100">
-                <p class="text-[11px] text-gray-600 font-medium">Similarity: <span class="text-[#6B9695] font-semibold">87%</span> to "EHR Data Sync Delays"</p>
+            {:else}
+              {@const displayContent = msg.content.replace(/<usecase_preview>[\s\S]*?<\/usecase_preview>/g, '').trim()}
+              {#if displayContent}
+                <div class="flex justify-start">
+                  <div class="bg-[#F0F9F9] border border-[#6B9695]/20 rounded-xl rounded-tl-sm px-4 py-3 max-w-[85%]">
+                    <p class="text-[13px] text-gray-900 whitespace-pre-wrap">{displayContent}{#if aiStreaming && msg === aiMessages[aiMessages.length - 1]}<span class="inline-block w-1.5 h-3.5 bg-[#6B9695] ml-0.5 animate-pulse rounded-sm"></span>{/if}</p>
+                  </div>
+                </div>
+              {:else if aiStreaming && msg === aiMessages[aiMessages.length - 1]}
+                <div class="flex justify-start">
+                  <div class="bg-[#F0F9F9] border border-[#6B9695]/20 rounded-xl rounded-tl-sm px-4 py-3">
+                    <span class="inline-block w-1.5 h-3.5 bg-[#6B9695] animate-pulse rounded-sm"></span>
+                  </div>
+                </div>
+              {/if}
+            {/if}
+          {/each}
+
+          {#if aiPreview}
+            <div class="bg-white border-2 border-[#6B9695] rounded-xl p-4 w-full">
+              <div class="flex items-center gap-2 mb-3">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6B9695" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                <span class="text-[11px] text-[#6B9695] font-semibold uppercase tracking-wide">Structured Preview</span>
+              </div>
+              <div class="space-y-2 mb-4">
+                <div>
+                  <p class="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-0.5">Title</p>
+                  <p class="text-[13px] text-gray-900 font-semibold">{aiPreview.title}</p>
+                </div>
+                <div>
+                  <p class="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-0.5">Summary</p>
+                  <p class="text-[12px] text-gray-700">{aiPreview.summary}</p>
+                </div>
+                <div class="flex gap-3">
+                  <div>
+                    <p class="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-0.5">Value</p>
+                    <span class="px-2 py-0.5 rounded-md text-[10px] border font-medium {aiPreview.value === 'High' ? 'bg-red-50 text-red-700 border-red-200' : aiPreview.value === 'Medium' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-gray-50 text-gray-600 border-gray-200'}">{aiPreview.value}</span>
+                  </div>
+                  <div>
+                    <p class="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-0.5">Viability</p>
+                    <span class="px-2 py-0.5 rounded-md text-[10px] border font-medium {aiPreview.viability === 'High' ? 'bg-blue-50 text-blue-700 border-blue-200' : aiPreview.viability === 'Medium' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-gray-50 text-gray-600 border-gray-200'}">{aiPreview.viability}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <button onclick={applyAiPreview} disabled={addingUseCase || savingEdit}
+                  class="flex-1 px-3 py-2 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[12px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  {selectedCardId ? (savingEdit ? 'Saving...' : 'Apply Changes') : (addingUseCase ? 'Adding...' : 'Create Use Case Card')}
+                </button>
+                <button onclick={() => aiPreview = null}
+                  class="px-3 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-[12px] font-medium transition-colors">
+                  Dismiss
+                </button>
               </div>
             </div>
-            <div class="flex gap-2">
-              <button onclick={() => showAddModal = true}
-                class="flex-1 px-3 py-2 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[12px] font-medium transition-colors">
-                Create Use Case Card
-              </button>
-              <button class="px-3 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-[12px] font-medium transition-colors">
-                Refine
-              </button>
-            </div>
-          </div>
+          {/if}
         </div>
 
         <div class="p-4 border-t border-gray-200">
           <div class="flex gap-2">
             <input type="text" placeholder="Describe a use case..." bind:value={aiInput}
-              class="flex-1 px-3 py-2 bg-[#FAFAF9] border border-gray-200 rounded-lg text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#6B9695] focus:border-transparent" />
-            <button class="px-4 py-2 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[13px] font-medium transition-colors">Send</button>
+              onkeydown={(e) => e.key === 'Enter' && sendAiMessage()}
+              disabled={aiStreaming}
+              class="flex-1 px-3 py-2 bg-[#FAFAF9] border border-gray-200 rounded-lg text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#6B9695] focus:border-transparent disabled:opacity-50" />
+            <button onclick={sendAiMessage} disabled={aiStreaming || !aiInput.trim()}
+              class="px-4 py-2 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[13px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              {aiStreaming ? '...' : 'Send'}
+            </button>
           </div>
         </div>
       </div>
@@ -652,61 +1144,311 @@
 </div>
 
 <!-- Add Use Case Modal -->
-{#if showAddModal}
-  <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+<!-- AI-Assisted Create Use Case Modal -->
+{#if aiCreationMode}
+  <div class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex overflow-hidden" style="height: min(680px, calc(100vh - 48px))">
+
+      <!-- Left: live form -->
+      <div class="w-[360px] shrink-0 border-r border-gray-200 flex flex-col">
+        <div class="px-6 py-5 border-b border-gray-100">
+          <h3 class="text-[16px] text-gray-900 font-bold">New Use Case</h3>
+          <p class="text-[11px] text-gray-400 mt-0.5">Fields update automatically as the AI structures your idea.</p>
+        </div>
+
+        <div class="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+          <div>
+            <label for="uc-title" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Title</label>
+            <input id="uc-title" type="text" bind:value={newTitle} placeholder="Short descriptive title"
+              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9] transition-colors {newTitle ? 'border-[#6B9695]/40' : ''}" />
+          </div>
+          <div>
+            <label for="uc-summary" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Summary</label>
+            <textarea id="uc-summary" bind:value={newSummary} rows="4" placeholder="What problem does AI solve here?"
+              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none bg-[#FAFAF9] transition-colors {newSummary ? 'border-[#6B9695]/40' : ''}"></textarea>
+          </div>
+          <div class="grid grid-cols-3 gap-2.5">
+            <div>
+              <label for="uc-value" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Value</label>
+              <select id="uc-value" bind:value={newValue} class="w-full px-2.5 py-2 border border-gray-200 rounded-lg text-[12px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9]">
+                <option>High</option><option>Medium</option><option>Low</option>
+              </select>
+            </div>
+            <div>
+              <label for="uc-viability" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Viability</label>
+              <select id="uc-viability" bind:value={newViability} class="w-full px-2.5 py-2 border border-gray-200 rounded-lg text-[12px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9]">
+                <option>High</option><option>Medium</option><option>Low</option>
+              </select>
+            </div>
+            <div>
+              <label for="uc-visibility" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Visibility</label>
+              <select id="uc-visibility" bind:value={newVisibility} class="w-full px-2.5 py-2 border border-gray-200 rounded-lg text-[12px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9]">
+                <option>Internal</option><option>Restricted</option><option>Cross-Silo</option>
+              </select>
+            </div>
+          </div>
+          {#if me}
+            <p class="text-[11px] text-gray-400">Adding as <span class="font-medium text-gray-600">{me.name}</span> · {teamForParticipant(me.id)?.name ?? 'no team'}</p>
+          {/if}
+        </div>
+
+        <div class="px-6 py-4 border-t border-gray-100 flex gap-2.5">
+          <button onclick={() => { aiCreationMode = false; aiPreview = null; }}
+            class="flex-1 py-2.5 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-lg text-[13px] font-medium transition-colors">
+            Cancel
+          </button>
+          <button onclick={addUseCase} disabled={addingUseCase || !newTitle.trim()}
+            class="flex-1 py-2.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[13px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            {addingUseCase ? 'Adding...' : 'Create Card'}
+          </button>
+        </div>
+      </div>
+
+      <!-- Right: AI Analyst chat -->
+      <div class="flex-1 flex flex-col min-w-0">
+        <!-- Header -->
+        <div class="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
+          <div class="flex items-center gap-2.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B9695" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <div>
+              <h3 class="text-[14px] text-gray-900 font-semibold">AI Analyst</h3>
+              <p class="text-[11px] text-[#6B9695] font-medium">Structuring your idea...</p>
+            </div>
+          </div>
+          <button onclick={() => { aiCreationMode = false; aiPreview = null; }} class="p-1.5 hover:bg-gray-100 rounded-md transition-colors" title="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <!-- Messages -->
+        <div class="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+          {#if aiMessages.length === 0}
+            <div class="text-center py-10">
+              <p class="text-[13px] text-gray-400">Describe the problem or opportunity you have in mind.</p>
+            </div>
+          {/if}
+
+          {#each aiMessages as msg}
+            {#if msg.role === 'user'}
+              <div class="flex justify-end">
+                <div class="bg-[#F5F3F0] rounded-xl rounded-tr-sm px-4 py-3 max-w-[85%]">
+                  <p class="text-[13px] text-gray-900">{msg.content}</p>
+                </div>
+              </div>
+            {:else}
+              {@const displayContent = msg.content.replace(/<usecase_preview>[\s\S]*?<\/usecase_preview>/g, '').trim()}
+              {#if displayContent}
+                <div class="flex justify-start">
+                  <div class="flex gap-2.5 max-w-[85%]">
+                    <div class="w-6 h-6 rounded-full bg-[#6B9695]/15 flex items-center justify-center shrink-0 mt-0.5">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6B9695" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    </div>
+                    <div class="bg-[#F0F9F9] border border-[#6B9695]/20 rounded-xl rounded-tl-sm px-4 py-3">
+                      <p class="text-[13px] text-gray-900 whitespace-pre-wrap">{displayContent}{#if aiStreaming && msg === aiMessages[aiMessages.length - 1]}<span class="inline-block w-1.5 h-3.5 bg-[#6B9695] ml-0.5 animate-pulse rounded-sm"></span>{/if}</p>
+                    </div>
+                  </div>
+                </div>
+              {:else if aiStreaming && msg === aiMessages[aiMessages.length - 1]}
+                <div class="flex justify-start">
+                  <div class="w-6 h-6 rounded-full bg-[#6B9695]/15 flex items-center justify-center shrink-0 mt-0.5 mr-2.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6B9695" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  </div>
+                  <div class="bg-[#F0F9F9] border border-[#6B9695]/20 rounded-xl rounded-tl-sm px-4 py-3">
+                    <span class="inline-block w-1.5 h-3.5 bg-[#6B9695] animate-pulse rounded-sm"></span>
+                  </div>
+                </div>
+              {/if}
+            {/if}
+          {/each}
+        </div>
+
+        <!-- Input -->
+        <div class="px-6 py-4 border-t border-gray-100 shrink-0">
+          <div class="flex gap-2">
+            <input type="text" placeholder="Describe your use case idea..." bind:value={aiInput}
+              onkeydown={(e) => e.key === 'Enter' && sendAiMessage()}
+              disabled={aiStreaming}
+              class="flex-1 px-3.5 py-2.5 bg-[#FAFAF9] border border-gray-200 rounded-lg text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#6B9695] focus:border-transparent disabled:opacity-50" />
+            <button onclick={sendAiMessage} disabled={aiStreaming || !aiInput.trim()}
+              class="px-5 py-2.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[13px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              {aiStreaming ? '...' : 'Send'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+{/if}
+
+<!-- Team Selection Modal -->
+{#if data.needsTeamSelection && !me}
+  <div class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
+      <div class="mb-5">
+        <h3 class="text-[18px] text-gray-900 font-bold mb-1">Welcome to the workshop</h3>
+        <p class="text-[13px] text-gray-500">Choose your breakout team to get started.</p>
+      </div>
+      <div class="space-y-2.5">
+        {#each teams as team}
+          <button
+            onclick={() => joinTeam(team.id)}
+            disabled={joiningTeam}
+            class="w-full flex items-center justify-between px-4 py-3 border-2 border-gray-200 hover:border-[#6B9695] hover:bg-[#F0F9F9] rounded-xl transition-colors text-left disabled:opacity-50">
+            <div>
+              <p class="text-[14px] font-semibold text-gray-900">{team.name}</p>
+              <p class="text-[11px] text-gray-500">{team.memberIds.length} member{team.memberIds.length !== 1 ? 's' : ''}</p>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B9695" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        {/each}
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Comment Drawer -->
+{#if commentCardId}
+  {@const card = cards.find(c => c.id === commentCardId)}
+  <div class="fixed inset-0 z-50 flex justify-end" onclick={(e) => e.target === e.currentTarget && (commentCardId = null)}>
+    <div class="w-full max-w-sm bg-white border-l border-gray-200 shadow-2xl flex flex-col h-full">
+      <!-- Header -->
+      <div class="px-5 py-4 border-b border-gray-200 flex items-start justify-between">
+        <div class="min-w-0 flex-1 pr-3">
+          <h3 class="text-[14px] font-semibold text-gray-900 mb-0.5 truncate">{card?.title ?? 'Comments'}</h3>
+          <p class="text-[11px] text-gray-500">{commentList.length} comment{commentList.length !== 1 ? 's' : ''}</p>
+        </div>
+        <button onclick={() => commentCardId = null} class="p-1.5 hover:bg-gray-100 rounded-md transition-colors shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-500"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Comments list -->
+      <div class="flex-1 overflow-y-auto p-5 space-y-4">
+        {#if commentLoading}
+          <p class="text-[13px] text-gray-400 text-center py-8">Loading...</p>
+        {:else if commentList.length === 0}
+          <div class="text-center py-10">
+            <svg class="mx-auto mb-3 text-gray-300" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <p class="text-[13px] text-gray-400">No comments yet. Be the first!</p>
+          </div>
+        {:else}
+          {#each commentList as comment}
+            <div class="flex gap-3">
+              <div class="w-7 h-7 rounded-full {comment.authorColor} flex items-center justify-center text-white text-[10px] font-semibold shrink-0 mt-0.5">
+                {comment.authorInitials}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-baseline gap-2 mb-1">
+                  <span class="text-[12px] font-semibold text-gray-900">{comment.authorName}</span>
+                  <span class="text-[10px] text-gray-400">{new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <p class="text-[13px] text-gray-700 leading-relaxed">{comment.content}</p>
+              </div>
+            </div>
+          {/each}
+        {/if}
+      </div>
+
+      <!-- Input -->
+      <div class="p-4 border-t border-gray-200">
+        {#if me}
+          <div class="flex gap-2 items-end">
+            <div class="w-7 h-7 rounded-full {me.color} flex items-center justify-center text-white text-[10px] font-semibold shrink-0">
+              {me.initials}
+            </div>
+            <div class="flex-1 flex gap-2">
+              <textarea
+                bind:value={commentInput}
+                onkeydown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postComment(); } }}
+                placeholder="Add a comment..."
+                rows="2"
+                class="flex-1 px-3 py-2 bg-[#FAFAF9] border border-gray-200 rounded-lg text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none"
+              ></textarea>
+              <button
+                onclick={postComment}
+                disabled={commentPosting || !commentInput.trim()}
+                class="px-3 py-2 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[12px] font-medium transition-colors disabled:opacity-50 self-end">
+                {commentPosting ? '...' : 'Post'}
+              </button>
+            </div>
+          </div>
+          <p class="text-[10px] text-gray-400 mt-1.5 ml-9">Enter to post · Shift+Enter for new line</p>
+        {:else}
+          <p class="text-[12px] text-gray-400 text-center">Join the workshop to comment.</p>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Edit Use Case Modal -->
+{#if selectedCardId}
+  {@const editingCard = cards.find(c => c.id === selectedCardId)}
+  <div class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onclick={(e) => e.target === e.currentTarget && deselectCard()}>
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-      <div class="flex items-center justify-between mb-5">
-        <h3 class="text-[16px] text-gray-900 font-semibold">Add Use Case</h3>
-        <button onclick={() => showAddModal = false} class="p-1.5 hover:bg-gray-100 rounded-md transition-colors" title="Close">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-500"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      <div class="flex items-start justify-between mb-5">
+        <div>
+          <h3 class="text-[18px] text-gray-900 font-bold">Edit Use Case</h3>
+          {#if editingCard}
+            <p class="text-[11px] text-gray-400 mt-0.5">Added by {editingCard.addedBy}</p>
+          {/if}
+        </div>
+        <button onclick={deselectCard} class="p-1.5 hover:bg-gray-100 rounded-md transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-500"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
 
       <div class="space-y-4">
         <div>
-          <label for="uc-title" class="block text-[13px] text-gray-700 font-medium mb-1.5">Title</label>
-          <input id="uc-title" type="text" bind:value={newTitle} placeholder="e.g. Intake form duplication"
-            class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] focus:border-transparent" />
+          <label for="edit-title" class="block text-[12px] text-gray-600 font-medium mb-1">Title</label>
+          <input id="edit-title" type="text" bind:value={editTitle} maxlength="80"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695]"
+            placeholder="Short descriptive title" />
         </div>
         <div>
-          <label for="uc-summary" class="block text-[13px] text-gray-700 font-medium mb-1.5">Summary</label>
-          <textarea id="uc-summary" bind:value={newSummary} rows="2" placeholder="Brief description of the issue..."
-            class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none placeholder:text-gray-400"></textarea>
+          <label for="edit-summary" class="block text-[12px] text-gray-600 font-medium mb-1">Summary</label>
+          <textarea id="edit-summary" bind:value={editSummary} rows="3"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none"
+            placeholder="One sentence describing the AI use case"></textarea>
         </div>
         <div class="grid grid-cols-3 gap-3">
           <div>
-            <label for="uc-value" class="block text-[12px] text-gray-600 font-medium mb-1">Value</label>
-            <select id="uc-value" bind:value={newValue} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-white">
+            <label for="edit-value" class="block text-[12px] text-gray-600 font-medium mb-1">Value</label>
+            <select id="edit-value" bind:value={editValue}
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-white">
               <option>High</option><option>Medium</option><option>Low</option>
             </select>
           </div>
           <div>
-            <label for="uc-viability" class="block text-[12px] text-gray-600 font-medium mb-1">Viability</label>
-            <select id="uc-viability" bind:value={newViability} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-white">
+            <label for="edit-viability" class="block text-[12px] text-gray-600 font-medium mb-1">Viability</label>
+            <select id="edit-viability" bind:value={editViability}
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-white">
               <option>High</option><option>Medium</option><option>Low</option>
             </select>
           </div>
           <div>
-            <label for="uc-visibility" class="block text-[12px] text-gray-600 font-medium mb-1">Visibility</label>
-            <select id="uc-visibility" bind:value={newVisibility} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-white">
+            <label for="edit-visibility" class="block text-[12px] text-gray-600 font-medium mb-1">Visibility</label>
+            <select id="edit-visibility" bind:value={editVisibility}
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-white">
               <option>Internal</option><option>Restricted</option><option>Cross-Silo</option>
             </select>
           </div>
         </div>
-        {#if me}
-          <p class="text-[12px] text-gray-500">Adding as <span class="font-medium text-gray-700">{me.name}</span> — {teamForParticipant(me.id)?.name ?? 'no team'}</p>
-        {/if}
       </div>
 
-      <div class="flex gap-3 mt-6">
-        <button onclick={() => showAddModal = false}
-          class="flex-1 py-2.5 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-[13px] font-medium transition-colors">
-          Cancel
-        </button>
-        <button onclick={addUseCase} disabled={addingUseCase || !newTitle.trim()}
-          class="flex-1 py-2.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[13px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-          {addingUseCase ? 'Adding...' : 'Add Use Case'}
-        </button>
+      <div class="mt-5 pt-4 border-t border-gray-100">
+        <p class="text-[11px] text-gray-400 mb-4">Tip: use the AI Analyst panel to suggest changes — click "Apply Changes" to auto-fill these fields.</p>
+        <div class="flex gap-3">
+          <button onclick={deselectCard}
+            class="flex-1 py-2.5 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-[13px] font-medium transition-colors">
+            Cancel
+          </button>
+          <button onclick={saveCardEdit} disabled={savingEdit || !editTitle.trim()}
+            class="flex-1 py-2.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[13px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            {savingEdit ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
       </div>
     </div>
   </div>

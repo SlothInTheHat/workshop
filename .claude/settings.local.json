@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:docs.optura.ai)",
-      "Bash(npx svelte-check:*)"
+      "Bash(npx svelte-check:*)",
+      "Bash(npm list:*)",
+      "Bash(npm run:*)",
+      "Bash(ls /c/Users/lalwa/Documents/code/workshop/src/routes/api/workshop/[workshopId]/)",
+      "Bash(ls /c/Users/lalwa/Documents/code/workshop/src/routes/workshop/[workshopId]/)",
+      "Bash(ls /c/Users/lalwa/Documents/code/workshop/src/routes/api/workshop/[workshopId]/usecases/)",
+      "Bash(ls /c/Users/lalwa/Documents/code/workshop/src/routes/api/workshop/[workshopId]/stream/)",
+      "Bash(docker compose:*)",
+      "Bash(DATABASE_URL=postgresql://postgres:postgres@localhost:5432/optura npx drizzle-kit generate)"
     ]
   }
 }

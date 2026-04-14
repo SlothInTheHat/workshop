@@ -1,6 +1,10 @@
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
+import { participants } from '$lib/workshop/store.js';
 
-export const load: PageServerLoad = async ({ fetch, params }) => {
+export const load: PageServerLoad = async ({ fetch, params, locals }) => {
+  if (!locals.user) redirect(302, '/auth/login');
+
   const { workshopId } = params;
 
   const [overviewRes, usecasesRes] = await Promise.all([
@@ -11,8 +15,9 @@ export const load: PageServerLoad = async ({ fetch, params }) => {
   const overview = overviewRes.ok ? await overviewRes.json() : { workshop: null, teams: [], participants: [] };
   const usecases = usecasesRes.ok ? await usecasesRes.json() : [];
 
-  // Treat the first participant as the current user (auth is bypassed)
-  const me = overview.participants?.[0] ?? null;
+  // Find participant matching the logged-in user
+  const me = participants.get(locals.user.id) ?? null;
+  const needsTeamSelection = !me || me.workshopId !== workshopId || !me.teamId;
 
   return {
     workshop: overview.workshop,
@@ -20,5 +25,13 @@ export const load: PageServerLoad = async ({ fetch, params }) => {
     participants: overview.participants ?? [],
     usecases,
     me,
+    needsTeamSelection,
+    currentUser: {
+      id: locals.user.id,
+      name: locals.user.name,
+      initials: locals.user.initials,
+      color: locals.user.color,
+      role: locals.user.role,
+    },
   };
 };

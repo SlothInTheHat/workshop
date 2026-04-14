@@ -38,6 +38,17 @@ export interface BreakoutTeam {
   createdAt: string;
 }
 
+export interface Comment {
+  id: string;
+  useCaseId: string;
+  participantId: string;
+  authorName: string;
+  authorInitials: string;
+  authorColor: string;
+  content: string;
+  createdAt: string;
+}
+
 export interface UseCase {
   id: string;
   workshopId: string;
@@ -54,7 +65,7 @@ export interface UseCase {
   clusterId?: number;
   upvotes: number;
   upvotedBy: string[];
-  comments: number;
+  commentCount: number;
   collaborators: string[];
   crossTeamOverlap?: string;
   insightId: string;
@@ -87,6 +98,7 @@ export type WorkshopEventType =
   | 'team_updated'
   | 'team_deleted'
   | 'insight_generated'
+  | 'comment_added'
   | 'participant_joined'
   | 'participant_left';
 

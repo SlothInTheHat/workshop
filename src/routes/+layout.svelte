@@ -4,8 +4,10 @@
   import { Toaster } from '@optura-ai/agent-ui-kit/components/sonner';
   import { initializeTheme } from '@optura-ai/agent-ui-kit/theme/store';
   import { page } from '$app/stores';
+  import type { PageData } from './$types';
 
-  let { children } = $props();
+  let { children, data }: { children: import('svelte').Snippet; data: PageData } = $props();
+  const user = $derived(data.user);
 
   onMount(() => {
     initializeTheme();
@@ -38,15 +40,20 @@
       </div>
 
       <div class="flex items-center gap-2">
-        <button class="w-8 h-8 flex items-center justify-center rounded-md hover:bg-[#F5F3F0] transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
-        </button>
-        <button class="w-8 h-8 flex items-center justify-center rounded-md hover:bg-[#F5F3F0] transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-        </button>
-        <button class="w-8 h-8 flex items-center justify-center rounded-md bg-[#4A5568] hover:bg-[#2D3748] transition-colors">
-          <span class="text-white text-[11px] font-semibold">A</span>
-        </button>
+        {#if user}
+          <span class="text-[12px] text-gray-500 mr-1">{user.name}</span>
+          <div class="w-8 h-8 rounded-full {user.color} flex items-center justify-center text-white text-[11px] font-semibold" title={user.name}>
+            {user.initials}
+          </div>
+          <form method="POST" action="/auth/logout">
+            <button type="submit" class="px-3 py-1.5 text-[12px] text-gray-600 hover:bg-[#F5F3F0] rounded-md transition-colors">
+              Sign out
+            </button>
+          </form>
+        {:else}
+          <a href="/auth/login" class="px-3 py-1.5 text-[12px] text-gray-600 hover:bg-[#F5F3F0] rounded-md transition-colors">Sign in</a>
+          <a href="/auth/register" class="px-3 py-1.5 text-[12px] bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-md transition-colors">Register</a>
+        {/if}
       </div>
     </nav>
 
