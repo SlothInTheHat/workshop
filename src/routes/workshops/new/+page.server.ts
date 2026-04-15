@@ -1,13 +1,18 @@
-import { redirect, fail } from '@sveltejs/kit';
+import { fail } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
-import { getSession, setSession, getAccessCodes, clearSession } from '$lib/session';
+import { getSession, setSession } from '$lib/session';
 import { generateCode } from '$lib/codes';
 
 export const load: PageServerLoad = async ({ cookies }) => {
-	// Always clear session and show name entry form
-	clearSession(cookies);
-	const codes = getAccessCodes();
-	return { session: null, needsAuth: true, codes };
+	const session = getSession(cookies);
+
+	// If already authenticated as a facilitator, use existing session
+	if (session?.role === 'facilitator') {
+		return { session, needsAuth: false };
+	}
+
+	// Not authenticated — will show name entry form
+	return { session: null, needsAuth: true };
 };
 
 export const actions: Actions = {
@@ -19,14 +24,12 @@ export const actions: Actions = {
 			return fail(400, { error: 'Name is required', name });
 		}
 
-		// Generate codes immediately
+		// Generate per-workshop codes upfront so they can be shown before DB creation
 		const facilitatorCode = generateCode('FAC');
 		const contributorCode = generateCode('CON');
 
-		// Auto-create facilitator session with codes stored
 		setSession(cookies, name, 'facilitator', undefined, facilitatorCode, contributorCode);
 
-		// Return codes to show on the page
 		return { success: true, facilitatorCode, contributorCode, name };
 	}
 };

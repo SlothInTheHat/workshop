@@ -6,6 +6,8 @@ import { eq } from 'drizzle-orm';
 // GET /api/workshops/[id]/artifacts
 export const GET: RequestHandler = async ({ params }) => {
 	const db = getDb();
+	if (!db) return json([]);
+
 	const rows = await db
 		.select()
 		.from(schema.artifacts)
@@ -17,6 +19,8 @@ export const GET: RequestHandler = async ({ params }) => {
 // POST /api/workshops/[id]/artifacts — store artifact URL (no real upload in Phase 1)
 export const POST: RequestHandler = async ({ params, request }) => {
 	const db = getDb();
+	if (!db) error(503, 'Database not available');
+
 	const body = (await request.json()) as {
 		title: string;
 		storageUrl: string;
@@ -31,8 +35,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 	const workshop = await db
 		.select()
-		.from(schema.workshops)
-		.where(eq(schema.workshops.id, params.id));
+		.from(schema.preWorkshops)
+		.where(eq(schema.preWorkshops.id, params.id));
 	if (workshop.length === 0) error(404, 'Workshop not found');
 
 	const id = crypto.randomUUID();
@@ -68,6 +72,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
 // DELETE /api/workshops/[id]/artifacts?artifactId=xxx
 export const DELETE: RequestHandler = async ({ params, url }) => {
 	const db = getDb();
+	if (!db) error(503, 'Database not available');
+
 	const artifactId = url.searchParams.get('artifactId');
 	if (!artifactId) error(400, 'artifactId query param is required');
 

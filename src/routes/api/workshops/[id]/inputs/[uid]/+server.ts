@@ -18,6 +18,8 @@ function calcCompletion(body: Partial<typeof schema.contributorInputs.$inferInse
 // GET /api/workshops/[id]/inputs/[uid] — [uid] is participantId
 export const GET: RequestHandler = async ({ params }) => {
 	const db = getDb();
+	if (!db) return json(null);
+
 	const rows = await db
 		.select()
 		.from(schema.contributorInputs)
@@ -35,6 +37,8 @@ export const GET: RequestHandler = async ({ params }) => {
 // POST /api/workshops/[id]/inputs/[uid] — create input record for a participant
 export const POST: RequestHandler = async ({ params, request }) => {
 	const db = getDb();
+	if (!db) error(503, 'Database not available');
+
 	const body = (await request.json()) as {
 		tenantId?: string;
 		goalsAndObjectives?: string;
@@ -58,8 +62,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 	const workshop = await db
 		.select()
-		.from(schema.workshops)
-		.where(eq(schema.workshops.id, params.id));
+		.from(schema.preWorkshops)
+		.where(eq(schema.preWorkshops.id, params.id));
 	if (workshop.length === 0) error(404, 'Workshop not found');
 
 	const id = crypto.randomUUID();
@@ -79,11 +83,10 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		status: completion === 0 ? 'pending' : completion === 100 ? 'completed' : 'in_progress'
 	});
 
-	// Update participant status
 	await db
-		.update(schema.participants)
+		.update(schema.preParticipants)
 		.set({ status: completion === 100 ? 'completed' : 'in_progress' })
-		.where(eq(schema.participants.id, params.uid));
+		.where(eq(schema.preParticipants.id, params.uid));
 
 	const row = await db
 		.select()
@@ -95,6 +98,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
 // PATCH /api/workshops/[id]/inputs/[uid] — auto-save or submit
 export const PATCH: RequestHandler = async ({ params, request }) => {
 	const db = getDb();
+	if (!db) error(503, 'Database not available');
+
 	const body = (await request.json()) as {
 		goalsAndObjectives?: string;
 		painPoints?: string;
@@ -144,18 +149,16 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 			)
 		);
 
-	// Update participant status
 	await db
-		.update(schema.participants)
+		.update(schema.preParticipants)
 		.set({ status: isSubmit ? 'completed' : 'in_progress' })
-		.where(eq(schema.participants.id, params.uid));
+		.where(eq(schema.preParticipants.id, params.uid));
 
-	// Log submission
 	if (isSubmit) {
 		const workshop = await db
 			.select()
-			.from(schema.workshops)
-			.where(eq(schema.workshops.id, params.id));
+			.from(schema.preWorkshops)
+			.where(eq(schema.preWorkshops.id, params.id));
 		if (workshop.length > 0) {
 			await db.insert(schema.activityLogs).values({
 				id: crypto.randomUUID(),

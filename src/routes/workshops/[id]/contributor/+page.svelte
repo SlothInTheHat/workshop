@@ -40,7 +40,7 @@
     const hasContent = [goals, painPoints, currentWorkflow, constraints, successCriteria].some(f => isFilled(f));
     if (!hasContent) { saveStatus = 'idle'; return; }
 
-    const url = `/api/workshops/${workshop.id}/inputs/${participant.id}`;
+    const url = `/api/workshops/${workshop.id}/inputs/${participant?.id}`;
     const body = { goalsAndObjectives: goals, painPoints, currentWorkflow, constraints, successCriteria, actorName: session.name };
 
     try {
@@ -71,7 +71,7 @@
     if (completionPct() < 100) { submitError = 'Please fill in all 5 sections before submitting.'; return; }
     submitError = '';
     submitting = true;
-    const url = `/api/workshops/${workshop.id}/inputs/${participant.id}`;
+    const url = `/api/workshops/${workshop.id}/inputs/${participant?.id}`;
     const body = { goalsAndObjectives: goals, painPoints, currentWorkflow, constraints, successCriteria, submit: true, actorName: session.name, tenantId: workshop.tenantId };
 
     try {

@@ -11,7 +11,6 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 
 	const db = getDb();
 
-	// If no database, return mock data
 	if (!db) {
 		return {
 			session,
@@ -19,7 +18,15 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 				id: params.id,
 				tenantId: 'default',
 				title: 'Workshop',
+				focusArea: null,
+				objective: null,
 				status: 'pre',
+				dataSensitivity: 'internal',
+				leadFacilitatorName: null,
+				aiContext: null,
+				kickoffSummary: null,
+				facilitatorCode: null,
+				contributorCode: null,
 				createdAt: new Date(),
 				updatedAt: new Date()
 			},
@@ -33,17 +40,17 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 
 	const workshopRows = await db
 		.select()
-		.from(schema.workshops)
-		.where(eq(schema.workshops.id, params.id));
+		.from(schema.preWorkshops)
+		.where(eq(schema.preWorkshops.id, params.id));
 
 	if (workshopRows.length === 0) error(404, 'Workshop not found');
 	const workshop = workshopRows[0];
 
 	const participants = await db
 		.select()
-		.from(schema.participants)
-		.where(eq(schema.participants.workshopId, params.id))
-		.orderBy(schema.participants.createdAt);
+		.from(schema.preParticipants)
+		.where(eq(schema.preParticipants.workshopId, params.id))
+		.orderBy(schema.preParticipants.createdAt);
 
 	const inputs = await db
 		.select()
@@ -62,7 +69,6 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 		.where(eq(schema.activityLogs.workshopId, params.id))
 		.orderBy(schema.activityLogs.createdAt);
 
-	// Merge input status into participant records
 	const participantsWithStatus = participants.map((p) => {
 		const input = inputs.find((i) => i.participantId === p.id);
 		return {
@@ -82,7 +88,7 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 		participants: participantsWithStatus,
 		inputs,
 		artifacts,
-		activityLog: activityLog.reverse(), // newest first
+		activityLog: activityLog.reverse(),
 		stats: { contributorCount, submittedCount, inProgressCount }
 	};
 };

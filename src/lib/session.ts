@@ -1,5 +1,4 @@
 import type { Cookies } from '@sveltejs/kit';
-import { PHASE1_ACCESS_CODES } from '$env/static/private';
 
 export type SessionRole = 'facilitator' | 'contributor';
 
@@ -56,7 +55,7 @@ export function clearSession(cookies: Cookies): void {
 }
 
 export function getAccessCodes(): { facilitator: string; contributor: string } {
-	const raw = PHASE1_ACCESS_CODES ?? 'FACILITATOR=FAC123,CONTRIBUTOR=CON123';
+	const raw = process.env.PHASE1_ACCESS_CODES ?? 'FACILITATOR=FAC123,CONTRIBUTOR=CON123';
 	const parts = Object.fromEntries(raw.split(',').map((p) => p.trim().split('=') as [string, string]));
 	return {
 		facilitator: (parts['FACILITATOR'] ?? 'FAC123').trim(),

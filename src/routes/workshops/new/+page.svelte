@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
-  const { session, needsAuth, codes } = $derived(data);
+  const { session, needsAuth } = $derived(data);
 
   let step = $state(1);
   let showCodesScreen = $state(false);
@@ -108,13 +108,13 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tenantId: session.tenantId,
+          tenantId: session?.tenantId ?? 'default',
           title: title.trim(),
           focusArea: focusArea.trim() || undefined,
           objective: objective.trim() || undefined,
           dataSensitivity,
           kickoffSummary: kickoffSummary.trim() || undefined,
-          leadFacilitatorName: session.name,
+          leadFacilitatorName: session?.name ?? facilitatorName,
           participants: participants.map(p => ({ name: p.name, email: p.email || undefined, role: p.role }))
         })
       });

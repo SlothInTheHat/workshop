@@ -6,18 +6,20 @@ import { eq } from 'drizzle-orm';
 // GET /api/workshops/[id]
 export const GET: RequestHandler = async ({ params }) => {
 	const db = getDb();
+	if (!db) error(503, 'Database not available');
+
 	const rows = await db
 		.select()
-		.from(schema.workshops)
-		.where(eq(schema.workshops.id, params.id));
+		.from(schema.preWorkshops)
+		.where(eq(schema.preWorkshops.id, params.id));
 
 	if (rows.length === 0) error(404, 'Workshop not found');
 
 	const workshop = rows[0];
 	const participants = await db
 		.select()
-		.from(schema.participants)
-		.where(eq(schema.participants.workshopId, params.id));
+		.from(schema.preParticipants)
+		.where(eq(schema.preParticipants.workshopId, params.id));
 
 	const inputs = await db
 		.select()
@@ -41,6 +43,8 @@ export const GET: RequestHandler = async ({ params }) => {
 // PATCH /api/workshops/[id]
 export const PATCH: RequestHandler = async ({ params, request }) => {
 	const db = getDb();
+	if (!db) error(503, 'Database not available');
+
 	const body = (await request.json()) as {
 		title?: string;
 		focusArea?: string;
@@ -54,11 +58,11 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 
 	const existing = await db
 		.select()
-		.from(schema.workshops)
-		.where(eq(schema.workshops.id, params.id));
+		.from(schema.preWorkshops)
+		.where(eq(schema.preWorkshops.id, params.id));
 	if (existing.length === 0) error(404, 'Workshop not found');
 
-	const updates: Partial<typeof schema.workshops.$inferInsert> = { updatedAt: new Date() };
+	const updates: Partial<typeof schema.preWorkshops.$inferInsert> = { updatedAt: new Date() };
 	if (body.title !== undefined) updates.title = body.title;
 	if (body.focusArea !== undefined) updates.focusArea = body.focusArea;
 	if (body.objective !== undefined) updates.objective = body.objective;
@@ -67,9 +71,8 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 	if (body.aiContext !== undefined) updates.aiContext = body.aiContext;
 	if (body.kickoffSummary !== undefined) updates.kickoffSummary = body.kickoffSummary;
 
-	await db.update(schema.workshops).set(updates).where(eq(schema.workshops.id, params.id));
+	await db.update(schema.preWorkshops).set(updates).where(eq(schema.preWorkshops.id, params.id));
 
-	// Log status changes
 	if (body.status === 'live') {
 		await db.insert(schema.activityLogs).values({
 			id: crypto.randomUUID(),
@@ -84,7 +87,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 
 	const updated = await db
 		.select()
-		.from(schema.workshops)
-		.where(eq(schema.workshops.id, params.id));
+		.from(schema.preWorkshops)
+		.where(eq(schema.preWorkshops.id, params.id));
 	return json(updated[0]);
 };

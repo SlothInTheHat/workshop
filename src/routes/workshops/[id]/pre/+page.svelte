@@ -249,7 +249,7 @@
           🚀 {launching ? 'Launching...' : 'Launch Workshop'}
         </button>
       {:else}
-        <a href="/workshop/workshop-1/live" class="px-5 py-2.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[13px] font-medium transition-colors">
+        <a href="/workshop/{workshop.id}/live" class="px-5 py-2.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[13px] font-medium transition-colors">
           Enter Live Workshop
         </a>
       {/if}
@@ -536,8 +536,43 @@
         </div>
       </div>
 
-      <!-- Sidebar: Activity Log -->
+      <!-- Sidebar -->
       <div class="space-y-4">
+
+        <!-- Access Codes -->
+        {#if workshop.facilitatorCode || workshop.contributorCode}
+          <div class="bg-white rounded-lg border border-gray-200 p-5">
+            <h3 class="text-[13px] text-gray-900 font-semibold mb-3">Access Codes</h3>
+            <p class="text-[11px] text-gray-400 mb-4">Share these codes so participants can join via <span class="font-medium text-gray-600">/join</span></p>
+            <div class="space-y-3">
+              {#if workshop.facilitatorCode}
+                <div class="bg-blue-50 border border-blue-100 rounded-lg p-3">
+                  <p class="text-[11px] text-blue-600 font-medium mb-1.5">Facilitator Code</p>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-mono text-[18px] font-bold text-blue-800 tracking-widest">{workshop.facilitatorCode}</span>
+                    <button
+                      onclick={() => navigator.clipboard.writeText(workshop.facilitatorCode ?? '')}
+                      class="px-2.5 py-1 bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 rounded text-[11px] font-medium transition-colors"
+                    >Copy</button>
+                  </div>
+                </div>
+              {/if}
+              {#if workshop.contributorCode}
+                <div class="bg-[#F0F9F9] border border-[#6B9695]/20 rounded-lg p-3">
+                  <p class="text-[11px] text-[#6B9695] font-medium mb-1.5">Contributor Code</p>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-mono text-[18px] font-bold text-[#4A7B7A] tracking-widest">{workshop.contributorCode}</span>
+                    <button
+                      onclick={() => navigator.clipboard.writeText(workshop.contributorCode ?? '')}
+                      class="px-2.5 py-1 bg-white border border-[#6B9695]/30 text-[#6B9695] hover:bg-[#F0F9F9] rounded text-[11px] font-medium transition-colors"
+                    >Copy</button>
+                  </div>
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/if}
+
         <div class="bg-white rounded-lg border border-gray-200 p-5">
           <h3 class="text-[13px] text-gray-900 font-semibold mb-4">Activity</h3>
           <div class="space-y-3">

@@ -6,16 +6,20 @@ import { eq } from 'drizzle-orm';
 // GET /api/workshops/[id]/participants
 export const GET: RequestHandler = async ({ params }) => {
 	const db = getDb();
+	if (!db) error(503, 'Database not available');
+
 	const rows = await db
 		.select()
-		.from(schema.participants)
-		.where(eq(schema.participants.workshopId, params.id));
+		.from(schema.preParticipants)
+		.where(eq(schema.preParticipants.workshopId, params.id));
 	return json(rows);
 };
 
 // POST /api/workshops/[id]/participants
 export const POST: RequestHandler = async ({ params, request }) => {
 	const db = getDb();
+	if (!db) error(503, 'Database not available');
+
 	const body = (await request.json()) as {
 		name: string;
 		email?: string;
@@ -27,12 +31,12 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 	const workshop = await db
 		.select()
-		.from(schema.workshops)
-		.where(eq(schema.workshops.id, params.id));
+		.from(schema.preWorkshops)
+		.where(eq(schema.preWorkshops.id, params.id));
 	if (workshop.length === 0) error(404, 'Workshop not found');
 
 	const id = crypto.randomUUID();
-	await db.insert(schema.participants).values({
+	await db.insert(schema.preParticipants).values({
 		id,
 		workshopId: params.id,
 		tenantId: workshop[0].tenantId,
@@ -55,7 +59,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 	const participant = await db
 		.select()
-		.from(schema.participants)
-		.where(eq(schema.participants.id, id));
+		.from(schema.preParticipants)
+		.where(eq(schema.preParticipants.id, id));
 	return json(participant[0], { status: 201 });
 };

@@ -138,7 +138,7 @@
                   Manage Pre-Workshop
                 </a>
                 {#if w.status === 'live'}
-                  <a href="/workshop/workshop-1/live" class="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-[13px] font-medium">
+                  <a href="/workshop/{w.id}/live" class="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-[13px] font-medium">
                     Enter Live Workshop
                   </a>
                 {/if}
@@ -148,7 +148,7 @@
                     Submit My Input
                   </a>
                 {:else if w.status === 'live'}
-                  <a href="/workshop/workshop-1/live" class="px-4 py-2 bg-[#6B9695] hover:bg-[#5D8685] text-white rounded-lg transition-colors text-[13px] font-medium">
+                  <a href="/workshop/{w.id}/live" class="px-4 py-2 bg-[#6B9695] hover:bg-[#5D8685] text-white rounded-lg transition-colors text-[13px] font-medium">
                     Join Live Workshop
                   </a>
                 {:else}

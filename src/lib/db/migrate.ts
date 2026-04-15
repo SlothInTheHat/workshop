@@ -12,6 +12,6 @@ export async function runMigrations(connectionString: string) {
 		console.log('[Migrations] Migrations completed successfully');
 		await client.end();
 	} catch (err) {
-		console.warn('[Migrations] Failed to run migrations:', err.message);
+		console.warn('[Migrations] Failed to run migrations:', (err as Error).message);
 	}
 }

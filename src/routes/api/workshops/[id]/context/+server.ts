@@ -7,19 +7,21 @@ import Anthropic from '@anthropic-ai/sdk';
 // POST /api/workshops/[id]/context — generate AI context from submitted inputs
 export const POST: RequestHandler = async ({ params, request }) => {
 	const db = getDb();
+	if (!db) error(503, 'Database not available');
+
 	const body = (await request.json()) as { actorName?: string };
 
 	const workshopRows = await db
 		.select()
-		.from(schema.workshops)
-		.where(eq(schema.workshops.id, params.id));
+		.from(schema.preWorkshops)
+		.where(eq(schema.preWorkshops.id, params.id));
 	if (workshopRows.length === 0) error(404, 'Workshop not found');
 	const workshop = workshopRows[0];
 
 	const participants = await db
 		.select()
-		.from(schema.participants)
-		.where(eq(schema.participants.workshopId, params.id));
+		.from(schema.preParticipants)
+		.where(eq(schema.preParticipants.workshopId, params.id));
 
 	const inputs = await db
 		.select()
@@ -35,19 +37,17 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 	const client = new Anthropic({ apiKey });
 
-	// Build participant input summary
 	const inputSummaries = inputs
 		.map((inp) => {
 			const participant = participants.find((p) => p.id === inp.participantId);
 			const name = participant?.name ?? 'Unknown Participant';
 			const role = participant?.role ?? 'contributor';
-			return `
-**${name}** (${role})
+			return `**${name}** (${role})
 - Goals & Objectives: ${inp.goalsAndObjectives ?? 'Not provided'}
 - Pain Points: ${inp.painPoints ?? 'Not provided'}
 - Current Workflow: ${inp.currentWorkflow ?? 'Not provided'}
 - Constraints: ${inp.constraints ?? 'Not provided'}
-- Success Criteria: ${inp.successCriteria ?? 'Not provided'}`.trim();
+- Success Criteria: ${inp.successCriteria ?? 'Not provided'}`;
 		})
 		.join('\n\n');
 
@@ -82,9 +82,9 @@ Write in a professional, enterprise-ready tone. Be specific and actionable. Form
 	const aiContext = content.type === 'text' ? content.text : '';
 
 	await db
-		.update(schema.workshops)
+		.update(schema.preWorkshops)
 		.set({ aiContext, updatedAt: new Date() })
-		.where(eq(schema.workshops.id, params.id));
+		.where(eq(schema.preWorkshops.id, params.id));
 
 	await db.insert(schema.activityLogs).values({
 		id: crypto.randomUUID(),
@@ -102,14 +102,15 @@ Write in a professional, enterprise-ready tone. Be specific and actionable. Form
 // PATCH /api/workshops/[id]/context — manually update AI context
 export const PATCH: RequestHandler = async ({ params, request }) => {
 	const db = getDb();
-	const body = (await request.json()) as { aiContext: string };
+	if (!db) error(503, 'Database not available');
 
+	const body = (await request.json()) as { aiContext: string };
 	if (body.aiContext === undefined) error(400, 'aiContext is required');
 
 	await db
-		.update(schema.workshops)
+		.update(schema.preWorkshops)
 		.set({ aiContext: body.aiContext, updatedAt: new Date() })
-		.where(eq(schema.workshops.id, params.id));
+		.where(eq(schema.preWorkshops.id, params.id));
 
 	return json({ success: true });
 };

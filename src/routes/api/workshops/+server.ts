@@ -3,7 +3,6 @@ import type { RequestHandler } from './$types';
 import { getDb, schema } from '$lib/db/index';
 import { eq } from 'drizzle-orm';
 import { generateCode } from '$lib/codes';
-import { getAccessCodes, getSession } from '$lib/session';
 
 // GET /api/workshops — list all workshops for a tenant
 export const GET: RequestHandler = async ({ url }) => {
@@ -37,7 +36,7 @@ export const GET: RequestHandler = async ({ url }) => {
 };
 
 // POST /api/workshops — create a new workshop (with participants)
-export const POST: RequestHandler = async ({ request, cookies }) => {
+export const POST: RequestHandler = async ({ request }) => {
 	const db = getDb();
 	const body = (await request.json()) as {
 		tenantId?: string;
@@ -52,20 +51,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 	const tenantId = body.tenantId ?? 'default';
 
-	// Get codes from session (generated during name entry)
-	const session = getSession(cookies);
-	let facilitatorCode: string;
-	let contributorCode: string;
-
-	if (session?.facilitatorCode && session?.contributorCode) {
-		// Use codes from session (what user already saw)
-		facilitatorCode = session.facilitatorCode;
-		contributorCode = session.contributorCode;
-	} else {
-		// Fallback: generate new codes if not in session
-		facilitatorCode = generateCode('FAC');
-		contributorCode = generateCode('CON');
-	}
+	// Always generate fresh codes per workshop
+	const facilitatorCode = generateCode('FAC');
+	const contributorCode = generateCode('CON');
 
 	// If database is available, create workshop in database
 	if (db) {

@@ -9,14 +9,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (!initialized) {
 		initialized = true;
 		try {
-			const { DATABASE_URL } = await import('$env/static/private');
-			if (DATABASE_URL) {
-				initDb(DATABASE_URL);
-				await runMigrations(DATABASE_URL);
+			const url = process.env.DATABASE_URL;
+			if (url) {
+				initDb(url);
+				await runMigrations(url);
 				await seedIfEmpty();
 			}
 		} catch (err) {
-			console.warn('[Hooks] DB init failed:', err.message);
+			console.warn('[Hooks] DB init failed:', (err as Error).message);
 		}
 	}
 	return resolve(event);

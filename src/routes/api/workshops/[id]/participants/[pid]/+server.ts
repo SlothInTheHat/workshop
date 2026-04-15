@@ -6,6 +6,8 @@ import { eq } from 'drizzle-orm';
 // PATCH /api/workshops/[id]/participants/[pid]
 export const PATCH: RequestHandler = async ({ params, request }) => {
 	const db = getDb();
+	if (!db) error(503, 'Database not available');
+
 	const body = (await request.json()) as {
 		name?: string;
 		email?: string;
@@ -15,40 +17,42 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 
 	const existing = await db
 		.select()
-		.from(schema.participants)
-		.where(eq(schema.participants.id, params.pid));
+		.from(schema.preParticipants)
+		.where(eq(schema.preParticipants.id, params.pid));
 	if (existing.length === 0) error(404, 'Participant not found');
 
-	const updates: Partial<typeof schema.participants.$inferInsert> = {};
+	const updates: Partial<typeof schema.preParticipants.$inferInsert> = {};
 	if (body.name !== undefined) updates.name = body.name;
 	if (body.email !== undefined) updates.email = body.email;
 	if (body.role !== undefined) updates.role = body.role;
 	if (body.status !== undefined) updates.status = body.status;
 
-	await db.update(schema.participants).set(updates).where(eq(schema.participants.id, params.pid));
+	await db.update(schema.preParticipants).set(updates).where(eq(schema.preParticipants.id, params.pid));
 
 	const updated = await db
 		.select()
-		.from(schema.participants)
-		.where(eq(schema.participants.id, params.pid));
+		.from(schema.preParticipants)
+		.where(eq(schema.preParticipants.id, params.pid));
 	return json(updated[0]);
 };
 
 // DELETE /api/workshops/[id]/participants/[pid]
 export const DELETE: RequestHandler = async ({ params }) => {
 	const db = getDb();
+	if (!db) error(503, 'Database not available');
+
 	const existing = await db
 		.select()
-		.from(schema.participants)
-		.where(eq(schema.participants.id, params.pid));
+		.from(schema.preParticipants)
+		.where(eq(schema.preParticipants.id, params.pid));
 	if (existing.length === 0) error(404, 'Participant not found');
 
-	await db.delete(schema.participants).where(eq(schema.participants.id, params.pid));
+	await db.delete(schema.preParticipants).where(eq(schema.preParticipants.id, params.pid));
 
 	const workshop = await db
 		.select()
-		.from(schema.workshops)
-		.where(eq(schema.workshops.id, params.id));
+		.from(schema.preWorkshops)
+		.where(eq(schema.preWorkshops.id, params.id));
 
 	if (workshop.length > 0) {
 		await db.insert(schema.activityLogs).values({
