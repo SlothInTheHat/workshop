@@ -43,7 +43,7 @@ The app runs without a database using static access codes:
 - Contributor code: `CON123`
 - Default workshop ID: `workshop-1`
 
-When database operations fail or `getDb()` returns `null`, the app gracefully falls back to mock data.
+When database operations fail or `getDb()` returns `null`, the app gracefully falls back to mock data or in-memory storage.
 
 ## Session Management
 
@@ -62,9 +62,15 @@ interface PreWorkshopSession {
 
 Access codes are generated using `generateCode(prefix)` from `src/lib/codes.ts` (e.g., `FAC-X3N4PQ`, `CON-H7K2YR`).
 
-## Workshop Flow
+## Workshop Lifecycle
 
-### 1. Create Workshop (`/workshops/new`)
+The workshop has three distinct phases:
+
+### 1. Pre-Workshop Phase
+
+**Purpose:** Collect context, define objectives, and gather participant inputs before the live workshop.
+
+#### Create Workshop (`/workshops/new`)
 
 **Flow:**
 1. Enter facilitator name
@@ -80,7 +86,11 @@ Access codes are generated using `generateCode(prefix)` from `src/lib/codes.ts` 
 - `src/routes/workshops/new/+page.svelte` — wizard UI with codes display
 - `src/routes/api/workshops/+server.ts` — creates workshop using codes from session
 
-### 2. Join Workshop (`/join`)
+**Database tables:**
+- `pre_workshops` — Workshop metadata, status, codes
+- `pre_participants` — Participants and their roles
+
+#### Join Workshop (`/join`)
 
 **Flow:**
 1. Enter name and access code
@@ -98,7 +108,7 @@ Access codes are generated using `generateCode(prefix)` from `src/lib/codes.ts` 
 **Key file:**
 - `src/routes/join/+page.server.ts` — queries database, falls back to static codes
 
-### 3. Pre-Workshop Phase
+#### Pre-Workshop Views
 
 **Facilitator view** (`/workshops/[id]/pre`):
 - Dashboard showing participants and submission status
@@ -108,28 +118,37 @@ Access codes are generated using `generateCode(prefix)` from `src/lib/codes.ts` 
 **Contributor view** (`/workshops/[id]/contributor`):
 - Input form for submitting pre-workshop contributions
 - View workshop context and objectives
+- Auto-creates participant record on first visit
 
 **Key files:**
 - `src/routes/workshops/[id]/pre/+page.server.ts` — facilitator dashboard data
 - `src/routes/workshops/[id]/contributor/+page.server.ts` — contributor input form data
 
+**Database tables:**
+- `contributor_inputs` — Pre-workshop submissions with status tracking
+- `artifacts` — Generated documents and assets
+- `activity_logs` — Audit trail
+
 Both pages gracefully handle `getDb() === null` by returning mock data.
 
-## Live Workshop Backend
+### 2. Live Workshop Phase
 
-### Data model (`src/lib/workshop/`)
+**Purpose:** Facilitate real-time collaborative ideation with breakout teams, use case submission, and cross-team insights.
+
+#### Data Model (`src/lib/workshop/`)
 
 | File | Purpose |
 |---|---|
 | `types.ts` | All TypeScript interfaces: `Workshop`, `BreakoutTeam`, `Participant`, `UseCase`, `Insight`, `WorkshopEvent` |
 | `store.ts` | In-memory singleton Maps + all mutation functions. Seeded with one workshop (`workshop-1`) and sample data on startup. |
 
-Key design decisions:
+**Key design decisions:**
 - Every `UseCase` created simultaneously writes an `Insight` record — they share an `insightId` and stay in sync on updates/deletes.
 - Cross-team overlap is detected automatically on `createUseCase` by keyword matching against existing titles from other teams.
 - All mutations call `broadcast()` which fans out a `WorkshopEvent` to all active SSE subscribers for that workshop.
+- Supports both database mode and in-memory fallback.
 
-### API routes (`src/routes/api/workshop/[workshopId]/`)
+#### API Routes (`src/routes/api/workshop/[workshopId]/`)
 
 | Route | Methods | Purpose |
 |---|---|---|
@@ -143,8 +162,17 @@ Key design decisions:
 | `/insights` | `GET` | List insights; supports `?teamId=` and `?sortBy=upvotes` |
 | `/insights/generate` | `POST` | Cluster all use cases by theme, detect cross-team overlap, tag insights, broadcast `insight_generated` |
 | `/stream` | `GET` | SSE stream; sends all `WorkshopEvent`s in real time + 15 s heartbeat |
+| `/stackrank` | `GET` | Calculate and return ranked use cases with final scores |
 
-### Real-time (SSE)
+**Database tables (if connected):**
+- `workshops` — Live workshop data
+- `participants` — Live workshop participants
+- `teams` — Breakout teams
+- `use_cases` — Submitted use cases with value/viability/visibility
+- `insights` — AI-generated insights and themes
+- `scores` — Participant scoring data (impact, feasibility, alignment, executive weight)
+
+#### Real-time (SSE)
 
 Connect to `GET /api/workshop/:workshopId/stream`. Each event is a JSON-encoded `WorkshopEvent`:
 
@@ -154,20 +182,108 @@ Connect to `GET /api/workshop/:workshopId/stream`. Each event is a JSON-encoded 
 
 Event types: `usecase_added | usecase_updated | usecase_upvoted | usecase_deleted | team_created | team_updated | team_deleted | insight_generated`
 
-### Terminology (from design spec)
+#### Terminology (from design spec)
+
 Use **Value** (not Impact) and **Viability** (not Feasibility) everywhere in data and UI.
+
+### 3. Post-Workshop Phase
+
+**Purpose:** Review workshop outcomes, generate AI summaries, analyze ranked use cases, and export artifacts.
+
+#### Post-Workshop Views
+
+**Facilitator view** (`/workshops/[workshopId]/post`):
+- Workshop summary with AI-generated insights
+- Stack-ranked use cases with final scores
+- Generate comprehensive summary using Claude
+- Export and share workshop outcomes
+
+**Contributor view** (`/workshops/[workshopId]/post/contributor`):
+- Read-only view of workshop results
+- See all use cases and teams
+- View final rankings and insights
+
+**Key files:**
+- `src/routes/workshops/[workshopId]/post/+page.server.ts` — facilitator post-workshop data
+- `src/routes/workshops/[workshopId]/post/contributor/+page.server.ts` — contributor post-workshop data
+
+#### AI Summary Generation
+
+**Endpoint:** `POST /api/workshop/[workshopId]/summary`
+
+**Requirements:**
+- `ANTHROPIC_API_KEY` environment variable must be configured
+- Workshop must have at least one use case
+- Uses Claude Sonnet 4.5 model
+
+**Summary structure:**
+```typescript
+{
+  overview: string;                    // 2-3 sentence executive summary
+  keyBottlenecks: string;              // Main bottlenecks identified
+  aiSuggestedThemes: string;           // Comma-separated list of 3-5 themes
+  crossWorkshopSignals: string;        // Enterprise-wide patterns
+  recommendedFocusAreas: string;       // Top 3-5 prioritized recommendations
+  fullSummary: string;                 // Complete narrative (4-5 paragraphs)
+  perUseCaseInsights: Array<{
+    useCaseId: string;
+    whyItMatters: string;              // Business impact explanation
+  }>;
+}
+```
+
+**Key file:**
+- `src/routes/api/workshop/[workshopId]/summary/+server.ts` — AI summary generation
+
+**Database table:**
+- `workshop_summaries` — Stores generated summaries with structured content
+
+#### Stack Ranking
+
+**Endpoint:** `GET /api/workshop/[workshopId]/stackrank`
+
+**Ranking formula:**
+```typescript
+finalScore = impactAvg * feasibilityAvg + 2 * upvotes + executiveWeightAvg
+```
+
+**Returned data:**
+```typescript
+{
+  ...useCase,
+  finalScore: number;
+  impactAvg: number;
+  feasibilityAvg: number;
+  alignmentAvg: number;
+  executiveWeightAvg: number;
+  scoreCount: number;
+}
+```
+
+**Key file:**
+- `src/routes/api/workshop/[workshopId]/stackrank/+server.ts` — Stack ranking calculation
 
 ## Database Schema
 
 Key tables (see `src/lib/db/schema.ts`):
 
-- `pre_workshops` — Workshop metadata, status, codes
+### Pre-Workshop Tables
+- `pre_workshops` — Workshop metadata, status, facilitator/contributor codes
 - `pre_participants` — Participants and their roles
-- `contributor_inputs` — Pre-workshop submissions
-- `artifacts` — Generated documents and assets
-- `activity_logs` — Audit trail
-- `workshops` — Live workshop data
+- `contributor_inputs` — Pre-workshop submissions with completion status
+- `artifacts` — Generated documents and assets with visibility control
+- `activity_logs` — Audit trail for workshop activities
+
+### Live Workshop Tables
+- `workshops` — Live workshop data (title, client, objectives, strategic pillars)
 - `participants` — Live workshop participants
+- `teams` — Breakout teams
+- `use_cases` — Submitted use cases with value/viability/visibility metrics
+- `insights` — AI-generated insights and themes
+- `scores` — Multi-dimensional scoring (impact, feasibility, alignment, executive weight)
+
+### Post-Workshop Tables
+- `workshop_summaries` — AI-generated comprehensive summaries with structured insights
 
 ## Error Handling
 
@@ -181,7 +297,10 @@ if (!db) {
 // ... database operations
 ```
 
-API routes wrap database inserts in try-catch blocks and fall back to static responses on error.
+API routes wrap database inserts in try-catch blocks and fall back to:
+- **Pre-workshop**: Static responses with mock workshop data
+- **Live workshop**: In-memory storage (`src/lib/workshop/store.ts`)
+- **Post-workshop**: In-memory summary generation and storage
 
 ## Private registry
 
