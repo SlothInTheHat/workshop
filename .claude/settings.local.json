@@ -9,7 +9,10 @@
       "Bash(git checkout:*)",
       "Bash(/dev/null)",
       "Bash(DATABASE_URL=postgresql://ayaanchawla@localhost:5432/optura pnpm dev:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd pre-workshop flows with database integration and static fallbacks\n\n- Implement lazy database initialization from server context\n- Add workshop creation wizard with access code generation\n- Add join workshop flow with code-based authentication\n- Store generated codes in session for consistency\n- Add pre-workshop views for facilitators and contributors\n- Gracefully fall back to static codes (FAC123/CON123) when DB unavailable\n- Contributors always route to input form regardless of workshop status\n- Update CLAUDE.md with comprehensive workflow documentation\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git commit -m \"$(cat <<''EOF''\nUpdate CLAUDE.md with comprehensive pre-workshop and post-workshop documentation\n\n- Document complete workshop lifecycle: pre-workshop, live, and post-workshop phases\n- Add pre-workshop phase: create workshop, join flow, contributor/facilitator views\n- Add live workshop phase: data model, API routes, real-time SSE, terminology\n- Add post-workshop phase: AI summary generation, stack ranking, contributor views\n- Include database schema for all three phases\n- Document AI summary structure and ranking formula\n- Add error handling patterns for database fallback modes\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)"
     ]
   }
 }
