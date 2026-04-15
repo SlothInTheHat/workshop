@@ -55,13 +55,21 @@
           <h1 class="text-3xl text-gray-900 mb-2 font-bold">Workshop Mode</h1>
           <p class="text-[14px] text-gray-600">{workshop?.client ?? 'Loading...'}</p>
         </div>
-        
-          href="/workshop/{workshopId}/setup"
-          class="flex items-center gap-2 px-4 py-2.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg transition-colors text-[14px] font-medium"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          New Workshop
-        </a>
+        <div class="flex items-center gap-3">
+          <a
+            href="/join"
+            class="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-[14px] font-medium"
+          >
+            Join Workshop
+          </a>
+          <a
+            href="/workshops/new"
+            class="flex items-center gap-2 px-4 py-2.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg transition-colors text-[14px] font-medium"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Workshop
+          </a>
+        </div>
       </div>
 
       <div class="flex items-center gap-3">

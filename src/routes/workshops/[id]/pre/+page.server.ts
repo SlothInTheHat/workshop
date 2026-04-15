@@ -11,6 +11,26 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 
 	const db = getDb();
 
+	// If no database, return mock data
+	if (!db) {
+		return {
+			session,
+			workshop: {
+				id: params.id,
+				tenantId: 'default',
+				title: 'Workshop',
+				status: 'pre',
+				createdAt: new Date(),
+				updatedAt: new Date()
+			},
+			participants: [],
+			inputs: [],
+			artifacts: [],
+			activityLog: [],
+			stats: { contributorCount: 0, submittedCount: 0, inProgressCount: 0 }
+		};
+	}
+
 	const workshopRows = await db
 		.select()
 		.from(schema.workshops)

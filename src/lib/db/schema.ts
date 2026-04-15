@@ -20,6 +20,8 @@ export const preWorkshops = pgTable('pre_workshops', {
 	leadFacilitatorName: text('lead_facilitator_name'),
 	aiContext: text('ai_context'),
 	kickoffSummary: text('kickoff_summary'),
+	facilitatorCode: text('facilitator_code'),
+	contributorCode: text('contributor_code'),
 	createdAt: timestamp('created_at').defaultNow().notNull(),
 	updatedAt: timestamp('updated_at').defaultNow().notNull()
 });

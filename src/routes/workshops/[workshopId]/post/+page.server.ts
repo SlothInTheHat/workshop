@@ -1,8 +1,20 @@
-import { error } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
+import { getSession } from '$lib/session';
 
-export const load: PageServerLoad = async ({ params, fetch }) => {
+export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
   const workshopId = params.workshopId;
+
+  // Check session role
+  const session = getSession(cookies);
+  if (!session) {
+    redirect(303, '/join');
+  }
+
+  // If contributor, redirect to contributor view
+  if (session.role === 'contributor') {
+    redirect(303, `/workshops/${workshopId}/post/contributor`);
+  }
 
   try {
     // Fetch workshop details

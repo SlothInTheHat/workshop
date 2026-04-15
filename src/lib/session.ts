@@ -1,4 +1,5 @@
 import type { Cookies } from '@sveltejs/kit';
+import { PHASE1_ACCESS_CODES } from '$env/static/private';
 
 export type SessionRole = 'facilitator' | 'contributor';
 
@@ -6,6 +7,9 @@ export interface PreWorkshopSession {
 	name: string;
 	role: SessionRole;
 	tenantId: string;
+	workshopId?: string;
+	facilitatorCode?: string;
+	contributorCode?: string;
 }
 
 const COOKIE_NAME = 'pw_session';
@@ -23,8 +27,22 @@ export function getSession(cookies: Cookies): PreWorkshopSession | null {
 	}
 }
 
-export function setSession(cookies: Cookies, name: string, role: SessionRole): void {
-	const session: PreWorkshopSession = { name, role, tenantId: DEFAULT_TENANT };
+export function setSession(
+	cookies: Cookies,
+	name: string,
+	role: SessionRole,
+	workshopId?: string,
+	facilitatorCode?: string,
+	contributorCode?: string
+): void {
+	const session: PreWorkshopSession = {
+		name,
+		role,
+		tenantId: DEFAULT_TENANT,
+		workshopId,
+		facilitatorCode,
+		contributorCode
+	};
 	cookies.set(COOKIE_NAME, JSON.stringify(session), {
 		path: '/',
 		httpOnly: true,
@@ -38,7 +56,7 @@ export function clearSession(cookies: Cookies): void {
 }
 
 export function getAccessCodes(): { facilitator: string; contributor: string } {
-	const raw = process.env.PHASE1_ACCESS_CODES ?? 'FACILITATOR=FAC123,CONTRIBUTOR=CON123';
+	const raw = PHASE1_ACCESS_CODES ?? 'FACILITATOR=FAC123,CONTRIBUTOR=CON123';
 	const parts = Object.fromEntries(raw.split(',').map((p) => p.trim().split('=') as [string, string]));
 	return {
 		facilitator: (parts['FACILITATOR'] ?? 'FAC123').trim(),

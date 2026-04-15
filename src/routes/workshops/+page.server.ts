@@ -9,13 +9,14 @@ export const load: PageServerLoad = async ({ cookies }) => {
 	if (!session) redirect(303, '/join?return=/workshops');
 
 	const db = getDb();
-	const tenantId = session.tenantId;
+
+	if (!db) {
+		return { session, workshops: [] };
+	}
 
 	const workshopRows = await db
 		.select()
-		.from(schema.workshops)
-		.where(eq(schema.workshops.tenantId, tenantId))
-		.orderBy(schema.workshops.createdAt);
+		.from(schema.workshops);
 
 	const workshops = await Promise.all(
 		workshopRows.map(async (w) => {
@@ -24,19 +25,9 @@ export const load: PageServerLoad = async ({ cookies }) => {
 				.from(schema.participants)
 				.where(eq(schema.participants.workshopId, w.id));
 
-			const inputs = await db
-				.select()
-				.from(schema.contributorInputs)
-				.where(eq(schema.contributorInputs.workshopId, w.id));
-
-			const submittedCount = inputs.filter((i) => i.status === 'completed').length;
-			const contributorCount = participants.filter((p) => p.role === 'contributor').length;
-
 			return {
 				...w,
 				participantCount: participants.length,
-				contributorCount,
-				submittedCount
 			};
 		})
 	);

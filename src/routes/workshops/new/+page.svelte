@@ -1,10 +1,33 @@
 <script lang="ts">
-  import type { PageData } from './$types';
+  import type { PageData, ActionData } from './$types';
+  import { enhance } from '$app/forms';
+  import { onMount } from 'svelte';
 
-  let { data }: { data: PageData } = $props();
-  const { session } = $derived(data);
+  let { data, form }: { data: PageData; form: ActionData } = $props();
+  const { session, needsAuth, codes } = $derived(data);
 
   let step = $state(1);
+  let showCodesScreen = $state(false);
+  let showSuccessScreen = $state(false);
+  let generatedFacilitatorCode = $state('');
+  let generatedContributorCode = $state('');
+  let createdWorkshopId = $state('');
+  let createdWorkshopTitle = $state('');
+  let createdFacilitatorCode = $state('');
+  let createdContributorCode = $state('');
+
+  // Name entry for new facilitators
+  let facilitatorName = $state('');
+  let submittingName = $state(false);
+
+  // Watch for form response with codes
+  $effect(() => {
+    if (form?.success && form?.facilitatorCode && form?.contributorCode) {
+      generatedFacilitatorCode = form.facilitatorCode;
+      generatedContributorCode = form.contributorCode;
+      showCodesScreen = true;
+    }
+  });
 
   // Step 1
   let title = $state('');
@@ -24,6 +47,23 @@
   let summaryError = $state('');
   let creating = $state(false);
   let createError = $state('');
+
+  // Reset form to fresh state on mount
+  onMount(() => {
+    step = 1;
+    showSuccessScreen = false;
+    title = '';
+    focusArea = '';
+    objective = '';
+    dataSensitivity = 'internal';
+    participants = [];
+    newName = '';
+    newEmail = '';
+    newRole = 'contributor';
+    kickoffSummary = '';
+    summaryError = '';
+    createError = '';
+  });
 
   function addParticipant() {
     const name = newName.trim();
@@ -81,13 +121,25 @@
       if (!res.ok) {
         createError = 'Failed to create workshop. Please try again.';
       } else {
-        const w = await res.json() as { id: string };
-        window.location.href = `/workshops/${w.id}/pre`;
+        const w = await res.json() as { id: string; facilitatorCode: string; contributorCode: string };
+        createdWorkshopId = w.id;
+        createdWorkshopTitle = title;
+        createdFacilitatorCode = w.facilitatorCode;
+        createdContributorCode = w.contributorCode;
+        showSuccessScreen = true;
       }
     } catch {
       createError = 'Unexpected error. Please try again.';
     } finally {
       creating = false;
+    }
+  }
+
+  async function copyToClipboard(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      console.error('Failed to copy:', err);
     }
   }
 
@@ -116,7 +168,199 @@
   <title>Create Workshop — Optura</title>
 </svelte:head>
 
-<div class="min-h-[calc(100vh-64px)] bg-[#FAFAF9]" style="font-family: Inter, sans-serif;">
+{#if needsAuth}
+  <!-- Name Entry Screen for New Facilitators -->
+  <div class="min-h-[calc(100vh-64px)] bg-[#FAFAF9] flex items-center justify-center px-4" style="font-family: Inter, sans-serif;">
+    <div class="w-full max-w-md">
+      <div class="bg-white rounded-lg border border-gray-200 p-8" style="box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+        <div class="mb-8">
+          <h1 class="text-[22px] text-gray-900 font-bold mb-1">Create Workshop</h1>
+          <p class="text-[13px] text-gray-500">Enter your name to get started.</p>
+        </div>
+
+        {#if form?.error}
+          <div class="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-lg">
+            <p class="text-[13px] text-red-700">{form.error}</p>
+          </div>
+        {/if}
+
+        <form
+          method="POST"
+          action="?/createSession"
+          use:enhance={() => {
+            submittingName = true;
+            return async ({ update }) => {
+              await update();
+              submittingName = false;
+            };
+          }}
+          class="space-y-5"
+        >
+          <div>
+            <label for="name" class="block text-[13px] text-gray-700 font-medium mb-2">Your Name</label>
+            <input
+              id="name"
+              name="name"
+              type="text"
+              bind:value={facilitatorName}
+              placeholder="e.g. Jane Smith"
+              autocomplete="name"
+              required
+              class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-[14px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#6B9695] focus:border-transparent placeholder:text-gray-400"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={submittingName}
+            class="w-full py-2.5 bg-[#6B9695] hover:bg-[#5A8584] text-white rounded-lg text-[14px] font-medium transition-colors disabled:opacity-60"
+          >
+            {submittingName ? 'Setting up...' : 'Continue'}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+{:else if showCodesScreen}
+  <!-- Codes Display Screen -->
+  <div class="min-h-[calc(100vh-64px)] bg-[#FAFAF9] flex items-center justify-center px-4" style="font-family: Inter, sans-serif;">
+    <div class="w-full max-w-2xl">
+      <div class="bg-white rounded-lg border border-gray-200 p-8" style="box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+        <div class="mb-8">
+          <h1 class="text-[22px] text-gray-900 font-bold mb-2">Your Workshop Codes</h1>
+          <p class="text-[13px] text-gray-500">Save these codes to share with your team.</p>
+        </div>
+
+        <div class="space-y-4 mb-8">
+          <div class="bg-[#F0F9F9] border border-[#6B9695]/20 rounded-lg p-5">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <h3 class="text-[13px] text-gray-600 font-medium mb-1">Facilitator Code</h3>
+                <p class="text-[11px] text-gray-500">For facilitators to join</p>
+              </div>
+              <button
+                onclick={() => copyToClipboard(generatedFacilitatorCode)}
+                class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-[12px] font-medium transition-colors"
+              >
+                Copy
+              </button>
+            </div>
+            <div class="font-mono text-[28px] font-bold text-[#6B9695] tracking-widest">
+              {generatedFacilitatorCode}
+            </div>
+          </div>
+
+          <div class="bg-[#F0F9F9] border border-[#6B9695]/20 rounded-lg p-5">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <h3 class="text-[13px] text-gray-600 font-medium mb-1">Contributor Code</h3>
+                <p class="text-[11px] text-gray-500">Share with participants</p>
+              </div>
+              <button
+                onclick={() => copyToClipboard(generatedContributorCode)}
+                class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-[12px] font-medium transition-colors"
+              >
+                Copy
+              </button>
+            </div>
+            <div class="font-mono text-[28px] font-bold text-[#6B9695] tracking-widest">
+              {generatedContributorCode}
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div class="flex gap-3">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <div>
+              <p class="text-[13px] text-blue-900 font-medium mb-1">Share the Contributor Code</p>
+              <p class="text-[12px] text-blue-700">Send the contributor code to your participants so they can join and submit their inputs.</p>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onclick={() => showCodesScreen = false}
+          class="w-full py-3 bg-[#6B9695] hover:bg-[#5A8584] text-white rounded-lg text-[14px] font-medium transition-colors"
+        >
+          Continue to Create Workshop
+        </button>
+      </div>
+    </div>
+  </div>
+{:else if showSuccessScreen}
+  <!-- Workshop Created Success Screen -->
+  <div class="min-h-[calc(100vh-64px)] bg-[#FAFAF9] flex items-center justify-center px-4" style="font-family: Inter, sans-serif;">
+    <div class="w-full max-w-2xl">
+      <div class="bg-white rounded-lg border border-gray-200 p-8" style="box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+        <div class="text-center mb-8">
+          <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <h1 class="text-[24px] text-gray-900 font-bold mb-2">Workshop Created!</h1>
+          <p class="text-[15px] text-gray-600">{createdWorkshopTitle}</p>
+        </div>
+
+        <div class="space-y-4 mb-8">
+          <div class="bg-[#F0F9F9] border border-[#6B9695]/20 rounded-lg p-5">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <h3 class="text-[13px] text-gray-600 font-medium mb-1">Facilitator Code</h3>
+                <p class="text-[11px] text-gray-500">For facilitators to join</p>
+              </div>
+              <button
+                onclick={() => copyToClipboard(createdFacilitatorCode)}
+                class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-[12px] font-medium transition-colors"
+              >
+                Copy
+              </button>
+            </div>
+            <div class="font-mono text-[28px] font-bold text-[#6B9695] tracking-widest">
+              {createdFacilitatorCode}
+            </div>
+          </div>
+
+          <div class="bg-[#F0F9F9] border border-[#6B9695]/20 rounded-lg p-5">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <h3 class="text-[13px] text-gray-600 font-medium mb-1">Contributor Code</h3>
+                <p class="text-[11px] text-gray-500">Share with participants</p>
+              </div>
+              <button
+                onclick={() => copyToClipboard(createdContributorCode)}
+                class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-[12px] font-medium transition-colors"
+              >
+                Copy
+              </button>
+            </div>
+            <div class="font-mono text-[28px] font-bold text-[#6B9695] tracking-widest">
+              {createdContributorCode}
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div class="flex gap-3">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <div>
+              <p class="text-[13px] text-blue-900 font-medium mb-1">Share the Contributor Code</p>
+              <p class="text-[12px] text-blue-700">Send the contributor code to your participants so they can join the workshop and submit their inputs.</p>
+            </div>
+          </div>
+        </div>
+
+        <a
+          href="/workshops/{createdWorkshopId}/pre"
+          class="block w-full py-3 bg-[#6B9695] hover:bg-[#5A8584] text-white text-center rounded-lg text-[14px] font-medium transition-colors"
+        >
+          Continue to Workshop
+        </a>
+      </div>
+    </div>
+  </div>
+{:else}
+  <!-- Workshop Creation Form -->
+  <div class="min-h-[calc(100vh-64px)] bg-[#FAFAF9]" style="font-family: Inter, sans-serif;">
   <div class="max-w-5xl mx-auto px-8 py-8">
 
     <!-- Breadcrumb -->
@@ -375,7 +619,7 @@
         <!-- Navigation -->
         <div class="flex items-center justify-between">
           <button
-            onclick={() => { if (step > 1) step--; else window.location.href = '/workshops'; }}
+            onclick={() => { if (step > 1) step--; else window.location.href = '/'; }}
             class="px-5 py-2.5 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-[13px] font-medium"
           >
             {step === 1 ? 'Cancel' : 'Back'}
@@ -438,4 +682,5 @@
       </div>
     </div>
   </div>
-</div>
+  </div>
+{/if}

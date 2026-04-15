@@ -3,7 +3,13 @@
     "allow": [
       "WebFetch(domain:docs.optura.ai)",
       "Bash(npx svelte-check:*)",
-      "Bash(pnpm remove:*)"
+      "Bash(pnpm remove:*)",
+      "Bash(echo:*)",
+      "Bash(DATABASE_URL=postgresql://postgres:postgres@localhost:5432/optura pnpm dev:*)",
+      "Bash(git checkout:*)",
+      "Bash(/dev/null)",
+      "Bash(DATABASE_URL=postgresql://ayaanchawla@localhost:5432/optura pnpm dev:*)",
+      "Bash(git add:*)"
     ]
   }
 }
