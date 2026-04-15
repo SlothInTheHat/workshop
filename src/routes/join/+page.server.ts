@@ -23,53 +23,77 @@ export const actions: Actions = {
 
 		const db = getDb();
 
+		console.log('[JOIN] Attempting to join with code:', code, 'Database available:', !!db);
+
 		// If database is available, query for workshop with matching code
 		if (db) {
-			const workshops = await db
-				.select()
-				.from(schema.preWorkshops)
-				.where(
-					or(
-						eq(schema.preWorkshops.facilitatorCode, code),
-						eq(schema.preWorkshops.contributorCode, code)
+			try {
+				// First, let's see ALL workshops in the database
+				const allWorkshops = await db.select().from(schema.preWorkshops);
+				console.log('[JOIN] Total workshops in database:', allWorkshops.length);
+				if (allWorkshops.length > 0) {
+					console.log('[JOIN] Workshop codes in DB:', allWorkshops.map(w => ({ fac: w.facilitatorCode, con: w.contributorCode })));
+				}
+
+				const workshops = await db
+					.select()
+					.from(schema.preWorkshops)
+					.where(
+						or(
+							eq(schema.preWorkshops.facilitatorCode, code),
+							eq(schema.preWorkshops.contributorCode, code)
+						)
 					)
-				)
-				.limit(1);
+					.limit(1);
 
-			if (workshops.length > 0) {
-				// Found workshop in database
-				const workshop = workshops[0];
-				let role: 'facilitator' | 'contributor';
+				console.log('[JOIN] Database query result:', workshops.length, 'workshops found');
 
-				if (workshop.facilitatorCode === code) {
-					role = 'facilitator';
-				} else {
-					role = 'contributor';
+				if (workshops.length > 0) {
+					console.log('[JOIN] Workshop codes:', {
+						facilitatorCode: workshops[0].facilitatorCode,
+						contributorCode: workshops[0].contributorCode,
+						inputCode: code
+					});
 				}
 
-				// Set session with workshopId
-				setSession(cookies, name, role, workshop.id);
+				if (workshops.length > 0) {
+					// Found workshop in database
+					const workshop = workshops[0];
+					let role: 'facilitator' | 'contributor';
 
-				// Contributors always go to the contributor input form
-				if (role === 'contributor') {
-					redirect(303, `/workshops/${workshop.id}/contributor`);
+					if (workshop.facilitatorCode === code) {
+						role = 'facilitator';
+					} else {
+						role = 'contributor';
+					}
+
+					// Set session with workshopId
+					setSession(cookies, name, role, workshop.id);
+
+					// Contributors always go to the contributor input form
+					if (role === 'contributor') {
+						redirect(303, `/workshops/${workshop.id}/contributor`);
+					}
+
+					// Facilitators route based on workshop status
+					const status = workshop.status;
+
+					if (status === 'pre' || status === 'draft') {
+						redirect(303, `/workshops/${workshop.id}/pre`);
+					} else if (status === 'live') {
+						redirect(303, `/workshop/${workshop.id}/live`);
+					} else if (status === 'completed') {
+						redirect(303, `/workshops/${workshop.id}/post`);
+					} else {
+						// Default fallback to pre
+						redirect(303, `/workshops/${workshop.id}/pre`);
+					}
 				}
-
-				// Facilitators route based on workshop status
-				const status = workshop.status;
-
-				if (status === 'pre' || status === 'draft') {
-					redirect(303, `/workshops/${workshop.id}/pre`);
-				} else if (status === 'live') {
-					redirect(303, `/workshop/${workshop.id}/live`);
-				} else if (status === 'completed') {
-					redirect(303, `/workshops/${workshop.id}/post`);
-				} else {
-					// Default fallback to pre
-					redirect(303, `/workshops/${workshop.id}/pre`);
-				}
+				// If no workshop found in database, fall through to static code check
+			} catch (err) {
+				console.error('[JOIN] Database query error:', err);
+				// Fall through to static codes
 			}
-			// If no workshop found in database, fall through to static code check
 		}
 
 		// Fallback to static access codes (either no database or no matching workshop)

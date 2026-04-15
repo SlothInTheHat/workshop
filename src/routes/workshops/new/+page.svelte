@@ -101,6 +101,8 @@
   }
 
   async function createWorkshop() {
+    console.log('CREATE WORKSHOP CALLED');
+    console.log('STEP:', step);
     creating = true;
     createError = '';
     try {
@@ -280,7 +282,7 @@
         </div>
 
         <button
-          onclick={() => showCodesScreen = false}
+          onclick={() => { showCodesScreen = false; step = 1; }}
           class="w-full py-3 bg-[#6B9695] hover:bg-[#5A8584] text-white rounded-lg text-[14px] font-medium transition-colors"
         >
           Continue to Create Workshop
