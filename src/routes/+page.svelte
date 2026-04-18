@@ -21,8 +21,7 @@
   };
 </script>
 
-<div class="bg-[#FAFAF9] min-h-screen" style="font-family: Inter, sans-serif;">
-  <!-- Stats Strip -->
+<div class="bg-[#f5f5f0] min-h-screen" style="font-family: Inter, sans-serif;">
   <div class="bg-white border-b border-gray-200 px-8 py-4">
     <div class="max-w-7xl mx-auto grid grid-cols-3 gap-4">
       {#each [
@@ -49,7 +48,6 @@
     </div>
   </div>
 
-  <!-- Main Content -->
   <div class="max-w-7xl mx-auto px-8 py-8">
     <div class="mb-8">
       <div class="flex items-center justify-between mb-6">
@@ -57,13 +55,21 @@
           <h1 class="text-3xl text-gray-900 mb-2 font-bold">Workshop Mode</h1>
           <p class="text-[14px] text-gray-600">{workshop?.client ?? 'Loading...'}</p>
         </div>
-        <a
-          href="/workshop/{workshopId}/setup"
-          class="flex items-center gap-2 px-4 py-2.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg transition-colors text-[14px] font-medium"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          New Workshop
-        </a>
+        <div class="flex items-center gap-3">
+          <a
+            href="/join"
+            class="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-[14px] font-medium"
+          >
+            Join Workshop
+          </a>
+          <a
+            href="/workshops/new"
+            class="flex items-center gap-2 px-4 py-2.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg transition-colors text-[14px] font-medium"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Workshop
+          </a>
+        </div>
       </div>
 
       <div class="flex items-center gap-3">
@@ -89,7 +95,6 @@
             <div class="bg-white rounded-lg border border-gray-200 p-6 max-w-2xl" style="box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
               <div class="space-y-5">
                 <h2 class="text-2xl text-gray-900 font-bold">{workshop.title}</h2>
-
                 <div class="space-y-2.5">
                   <div class="flex items-center">
                     <span class="text-[12px] text-gray-500 min-w-[120px]">Client</span>
@@ -127,17 +132,15 @@
                     <span class="text-[12px] text-gray-700">{useCaseCount} submitted</span>
                   </div>
                 </div>
-
                 <div class="border-t border-gray-100 pt-5"></div>
-
                 <div class="flex items-center gap-2.5">
                   <a href="/workshop/{workshopId}/live"
                     class="px-4 py-2 bg-[#6B9695] hover:bg-[#5D8685] text-white rounded-md transition-colors text-[13px] font-medium">
                     Enter Workshop
                   </a>
-                  <a href="/workshop/{workshopId}/summary"
+                  <a href="/workshops/{workshopId}/post"
                     class="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-md transition-colors text-[13px] font-medium">
-                    View Summary
+                    Post Workshop
                   </a>
                 </div>
               </div>

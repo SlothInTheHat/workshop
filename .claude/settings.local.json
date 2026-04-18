@@ -10,7 +10,14 @@
       "Bash(ls /c/Users/lalwa/Documents/code/workshop/src/routes/api/workshop/[workshopId]/usecases/)",
       "Bash(ls /c/Users/lalwa/Documents/code/workshop/src/routes/api/workshop/[workshopId]/stream/)",
       "Bash(docker compose:*)",
-      "Bash(DATABASE_URL=postgresql://postgres:postgres@localhost:5432/optura npx drizzle-kit generate)"
+      "Bash(DATABASE_URL=postgresql://postgres:postgres@localhost:5432/optura npx drizzle-kit generate)",
+      "Bash(pnpm remove:*)",
+      "Bash(echo:*)",
+      "Bash(git checkout:*)",
+      "Bash(/dev/null)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(psql:*)"
     ]
   }
 }

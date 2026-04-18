@@ -5,6 +5,7 @@ import {
   integer,
   timestamp,
   real,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 
 // ── Workshops ─────────────────────────────────────────────────────────────────
@@ -141,5 +142,110 @@ export const comments = pgTable('comments', {
     .references(() => workshopParticipants.id),
   authorName: text('author_name').notNull(),
   content: text('content').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// ── Post-Workshop ─────────────────────────────────────────────────────────────
+
+export const scores = pgTable('scores', {
+  id: text('id').primaryKey(),
+  workshopId: text('workshop_id').notNull().references(() => workshops.id, { onDelete: 'cascade' }),
+  useCaseId: text('use_case_id').notNull().references(() => useCases.id, { onDelete: 'cascade' }),
+  scoredBy: text('scored_by').notNull(),
+  impact: integer('impact').notNull(),
+  feasibility: integer('feasibility').notNull(),
+  alignment: integer('alignment').notNull(),
+  executiveWeight: integer('executive_weight').notNull(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const promotions = pgTable('promotions', {
+  id: text('id').primaryKey(),
+  workshopId: text('workshop_id').notNull().references(() => workshops.id, { onDelete: 'cascade' }),
+  useCaseId: text('use_case_id').notNull().references(() => useCases.id, { onDelete: 'cascade' }),
+  promotedBy: text('promoted_by').notNull(),
+  targetType: text('target_type').notNull(),
+  promotedAt: timestamp('promoted_at').notNull().defaultNow(),
+});
+
+export const workshopSummaries = pgTable('workshop_summaries', {
+  id: text('id').primaryKey(),
+  workshopId: text('workshop_id').notNull().references(() => workshops.id, { onDelete: 'cascade' }),
+  content: jsonb('content').notNull(),
+  generatedAt: timestamp('generated_at').notNull().defaultNow(),
+});
+
+// ── Pre-Workshop ──────────────────────────────────────────────────────────────
+
+export const tenants = pgTable('tenants', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  domain: text('domain'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const preWorkshops = pgTable('pre_workshops', {
+  id: text('id').primaryKey(),
+  tenantId: text('tenant_id').notNull(),
+  title: text('title').notNull(),
+  focusArea: text('focus_area'),
+  objective: text('objective'),
+  status: text('status').notNull().default('draft'),
+  dataSensitivity: text('data_sensitivity').notNull().default('internal'),
+  leadFacilitatorName: text('lead_facilitator_name'),
+  aiContext: text('ai_context'),
+  kickoffSummary: text('kickoff_summary'),
+  facilitatorCode: text('facilitator_code'),
+  contributorCode: text('contributor_code'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const preParticipants = pgTable('pre_participants', {
+  id: text('id').primaryKey(),
+  workshopId: text('workshop_id').notNull(),
+  tenantId: text('tenant_id').notNull(),
+  name: text('name').notNull(),
+  email: text('email'),
+  role: text('role').notNull().default('contributor'),
+  status: text('status').notNull().default('pending'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const contributorInputs = pgTable('contributor_inputs', {
+  id: text('id').primaryKey(),
+  workshopId: text('workshop_id').notNull(),
+  participantId: text('participant_id').notNull(),
+  tenantId: text('tenant_id').notNull(),
+  goalsAndObjectives: text('goals_and_objectives'),
+  painPoints: text('pain_points'),
+  currentWorkflow: text('current_workflow'),
+  constraints: text('constraints'),
+  successCriteria: text('success_criteria'),
+  completionPct: integer('completion_pct').notNull().default(0),
+  status: text('status').notNull().default('pending'),
+  submittedAt: timestamp('submitted_at'),
+});
+
+export const artifacts = pgTable('artifacts', {
+  id: text('id').primaryKey(),
+  workshopId: text('workshop_id').notNull(),
+  tenantId: text('tenant_id').notNull(),
+  uploadedBy: text('uploaded_by').notNull(),
+  type: text('type').notNull().default('document'),
+  title: text('title').notNull(),
+  storageUrl: text('storage_url').notNull(),
+  visibility: text('visibility').notNull().default('all'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const activityLogs = pgTable('activity_logs', {
+  id: text('id').primaryKey(),
+  workshopId: text('workshop_id').notNull(),
+  tenantId: text('tenant_id').notNull(),
+  actorName: text('actor_name').notNull(),
+  action: text('action').notNull(),
+  details: text('details'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
