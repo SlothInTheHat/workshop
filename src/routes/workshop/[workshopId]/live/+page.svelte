@@ -23,9 +23,16 @@
 
   // AI semantic clusters (workshop-wide view)
   interface AiCluster { theme: string; useCaseIds: string[] }
+  interface VoronoiRegion {
+    id: number; theme: string; count: number; useCaseIds: Set<string>;
+    polygon: { x: number; y: number }[];
+    centroid: { x: number; y: number };
+    color: string; borderColor: string; labelColor: string;
+  }
   let aiClusters = $state<AiCluster[]>([]);
   let aiClusterLoading = $state(false);
   let clusteredCardPositions = $state<Record<string, { x: number; y: number }>>({});
+  let voronoiRegions = $state<VoronoiRegion[]>([]);
 
   interface AiMessage {
     role: 'user' | 'assistant';
@@ -67,43 +74,109 @@
     aiPreview = saved?.preview ?? null;
   }
 
-  // ── AI semantic clustering ────────────────────────────────────────────────────
+  // ── AI semantic clustering + Voronoi layout ──────────────────────────────────
+
+  type Pt = { x: number; y: number };
+
+  // Clip a convex polygon to the half-plane: (p - mid) · norm >= 0
+  function clipToHalfPlane(poly: Pt[], mid: Pt, norm: Pt): Pt[] {
+    if (!poly.length) return [];
+    const out: Pt[] = [];
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i];
+      const b = poly[(i + 1) % poly.length];
+      const da = (a.x - mid.x) * norm.x + (a.y - mid.y) * norm.y;
+      const db = (b.x - mid.x) * norm.x + (b.y - mid.y) * norm.y;
+      if (da >= 0) out.push(a);
+      if ((da >= 0) !== (db >= 0)) {
+        const t = da / (da - db);
+        out.push({ x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) });
+      }
+    }
+    return out;
+  }
+
+  // Compute the Voronoi cell polygon for seed[i] within the bounding rect
+  function voronoiCell(seeds: Pt[], i: number, W: number, H: number): Pt[] {
+    let poly: Pt[] = [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: H }, { x: 0, y: H }];
+    for (let j = 0; j < seeds.length; j++) {
+      if (j === i || !poly.length) continue;
+      const mid: Pt = { x: (seeds[i].x + seeds[j].x) / 2, y: (seeds[i].y + seeds[j].y) / 2 };
+      const norm: Pt = { x: seeds[i].x - seeds[j].x, y: seeds[i].y - seeds[j].y };
+      poly = clipToHalfPlane(poly, mid, norm);
+    }
+    return poly;
+  }
+
+  function polygonCentroid(poly: Pt[]): Pt {
+    const cx = poly.reduce((s, p) => s + p.x, 0) / poly.length;
+    const cy = poly.reduce((s, p) => s + p.y, 0) / poly.length;
+    return { x: cx, y: cy };
+  }
+
+  // Predefined seed positions for N clusters on a 1600×900 canvas
+  const SEEDS_BY_N: Pt[][] = [
+    [],
+    [{ x: 800, y: 450 }],
+    [{ x: 530, y: 450 }, { x: 1070, y: 450 }],
+    [{ x: 400, y: 310 }, { x: 1200, y: 310 }, { x: 800, y: 650 }],
+    [{ x: 400, y: 300 }, { x: 1200, y: 300 }, { x: 400, y: 660 }, { x: 1200, y: 660 }],
+    [{ x: 320, y: 310 }, { x: 980, y: 310 }, { x: 1340, y: 510 }, { x: 640, y: 650 }, { x: 1160, y: 650 }],
+    [{ x: 320, y: 290 }, { x: 800, y: 290 }, { x: 1280, y: 290 }, { x: 320, y: 660 }, { x: 800, y: 660 }, { x: 1280, y: 660 }],
+  ];
+
+  const VORONOI_PALETTE = [
+    { color: 'rgba(107,150,149,0.10)', borderColor: 'rgba(107,150,149,0.35)', labelColor: '#6B9695' },
+    { color: 'rgba(99,179,135,0.10)', borderColor: 'rgba(99,179,135,0.35)', labelColor: '#38A169' },
+    { color: 'rgba(99,122,179,0.10)', borderColor: 'rgba(99,122,179,0.35)', labelColor: '#5A6FBA' },
+    { color: 'rgba(229,159,60,0.10)', borderColor: 'rgba(229,159,60,0.35)', labelColor: '#B7791F' },
+    { color: 'rgba(199,97,97,0.10)', borderColor: 'rgba(199,97,97,0.35)', labelColor: '#C05252' },
+    { color: 'rgba(159,122,234,0.10)', borderColor: 'rgba(159,122,234,0.35)', labelColor: '#805AD5' },
+  ];
+
+  const CANVAS_W = 1600, CANVAS_H = 900;
+  const CARD_W = 256, CARD_H = 240, GAP = 20;
 
   function computeClusterLayout(clusters: AiCluster[]) {
-    const CARD_W = 256, CARD_H = 240;
-    const GAP_X = 20, GAP_Y = 20;
-    const PAD_X = 36, PAD_TOP = 52, PAD_BOT = 28;
-    const CLUSTER_GAP = 64;
-    const CANVAS_MAX_W = 1400;
+    const n = clusters.length;
+    if (!n) { clusteredCardPositions = {}; voronoiRegions = []; return; }
+
+    const seeds = (SEEDS_BY_N[Math.min(n, 6)] ?? SEEDS_BY_N[6]).slice(0, n);
 
     const pos: Record<string, { x: number; y: number }> = {};
-    let cx = 40, cy = 80, rowH = 0;
+    const regions: VoronoiRegion[] = [];
 
-    for (const cluster of clusters) {
-      const n = cluster.useCaseIds.length;
-      const cols = Math.min(Math.max(1, Math.ceil(Math.sqrt(n))), 3);
-      const rows = Math.ceil(n / cols);
-      const cW = PAD_X * 2 + cols * CARD_W + (cols - 1) * GAP_X;
-      const cH = PAD_TOP + PAD_BOT + rows * CARD_H + (rows - 1) * GAP_Y;
-
-      if (cx > 40 && cx + cW > CANVAS_MAX_W) {
-        cx = 40; cy += rowH + CLUSTER_GAP; rowH = 0;
-      }
+    clusters.forEach((cluster, i) => {
+      const seed = seeds[i];
+      const cardCount = cluster.useCaseIds.length;
+      const cols = Math.min(Math.max(1, Math.ceil(Math.sqrt(cardCount))), 3);
+      const rows = Math.ceil(cardCount / cols);
+      const gridW = cols * CARD_W + (cols - 1) * GAP;
+      const gridH = rows * CARD_H + (rows - 1) * GAP;
 
       cluster.useCaseIds.forEach((id, idx) => {
         const col = idx % cols;
         const row = Math.floor(idx / cols);
         pos[id] = {
-          x: cx + PAD_X + col * (CARD_W + GAP_X),
-          y: cy + PAD_TOP + row * (CARD_H + GAP_Y),
+          x: seed.x - gridW / 2 + col * (CARD_W + GAP),
+          y: seed.y - gridH / 2 + row * (CARD_H + GAP),
         };
       });
 
-      cx += cW + CLUSTER_GAP;
-      rowH = Math.max(rowH, cH);
-    }
+      const poly = voronoiCell(seeds, i, CANVAS_W, CANVAS_H);
+      regions.push({
+        id: i,
+        theme: cluster.theme,
+        count: cardCount,
+        useCaseIds: new Set(cluster.useCaseIds),
+        polygon: poly,
+        centroid: polygonCentroid(poly),
+        ...VORONOI_PALETTE[i % VORONOI_PALETTE.length],
+      });
+    });
 
     clusteredCardPositions = pos;
+    voronoiRegions = regions;
   }
 
   async function fetchAiClusters() {
@@ -437,38 +510,6 @@
     });
   });
 
-  // Derived bounding boxes for AI semantic clusters
-  const aiClusterRects = $derived(() => {
-    if (!aiClusters.length) return [];
-    const CARD_W = 256, CARD_H = 240, PAD = 28;
-    const palette = [
-      { color: 'rgba(107,150,149,0.08)', borderColor: 'rgba(107,150,149,0.3)', labelColor: '#6B9695' },
-      { color: 'rgba(99,179,135,0.08)', borderColor: 'rgba(99,179,135,0.3)', labelColor: '#38A169' },
-      { color: 'rgba(99,122,179,0.08)', borderColor: 'rgba(99,122,179,0.3)', labelColor: '#5A6FBA' },
-      { color: 'rgba(229,159,60,0.08)', borderColor: 'rgba(229,159,60,0.3)', labelColor: '#B7791F' },
-      { color: 'rgba(199,97,97,0.08)', borderColor: 'rgba(199,97,97,0.3)', labelColor: '#C05252' },
-      { color: 'rgba(159,122,234,0.08)', borderColor: 'rgba(159,122,234,0.3)', labelColor: '#805AD5' },
-    ];
-    return aiClusters.map((cluster, i) => {
-      const positions = cluster.useCaseIds.map(id => clusteredCardPositions[id]).filter(Boolean) as { x: number; y: number }[];
-      if (!positions.length) return null;
-      const xs = positions.map(p => p.x);
-      const ys = positions.map(p => p.y);
-      const minX = Math.min(...xs) - PAD;
-      const minY = Math.min(...ys) - 44;
-      const maxX = Math.max(...xs) + CARD_W + PAD;
-      const maxY = Math.max(...ys) + CARD_H + PAD;
-      return {
-        id: i,
-        theme: cluster.theme,
-        count: cluster.useCaseIds.length,
-        useCaseIds: new Set(cluster.useCaseIds),
-        ...palette[i % palette.length],
-        rect: { x: minX, y: minY, w: maxX - minX, h: maxY - minY },
-      };
-    }).filter((c): c is NonNullable<typeof c> => c !== null);
-  });
-
   // ── Drag ──────────────────────────────────────────────────────────────────────
 
   function onCardMouseDown(e: MouseEvent, card: UseCase) {
@@ -576,6 +617,7 @@
         aiPreview = null;
         saveSession();
         loadSession('new');
+        if (voronoiRegions.length > 0) fetchAiClusters();
       } else {
         const errText = await res.text().catch(() => res.status.toString());
         console.error('addUseCase failed', res.status, errText);
@@ -598,8 +640,6 @@
     } else {
       zoom = 1;
       teamFilter = 'Mine';
-      aiClusters = [];
-      clusteredCardPositions = {};
     }
     selectedCluster = null;
   }
@@ -653,7 +693,10 @@
   function handleSSEEvent(event: WorkshopEvent) {
     const d = event.data as any;
     if (event.type === 'usecase_added') {
-      if (!cards.find(c => c.id === d.id)) cards = [...cards, d];
+      if (!cards.find(c => c.id === d.id)) {
+        cards = [...cards, d];
+        if (voronoiRegions.length > 0) fetchAiClusters();
+      }
     } else if (event.type === 'usecase_updated') {
       cards = cards.map(c => c.id === d.id ? { ...c, ...d } : c);
     } else if (event.type === 'usecase_upvoted') {
@@ -860,66 +903,63 @@
       <!-- Zoomable canvas -->
       <div class="absolute inset-0 pt-16" style="transform: scale({zoom}); transform-origin: 0 0; transition: {draggingId ? 'none' : 'transform 0.1s ease-out'};">
 
-        <!-- Cluster backgrounds (workshop view) -->
-        {#if viewMode === 'workshop-wide'}
-          {#if aiClusters.length > 0}
-            {#each aiClusterRects() as cluster}
-              <div
-                class="absolute rounded-2xl transition-all duration-200 cursor-pointer"
-                style="
-                  left: {cluster.rect.x}px; top: {cluster.rect.y}px;
-                  width: {cluster.rect.w}px; height: {cluster.rect.h}px;
-                  background: {selectedCluster === cluster.id ? cluster.color.replace('0.08', '0.14') : cluster.color};
-                  border: 1.5px dashed {cluster.borderColor};
-                  opacity: {selectedCluster !== null && selectedCluster !== cluster.id ? 0.3 : 1};
-                "
-                role="button" tabindex="0"
-                onclick={() => selectedCluster = selectedCluster === cluster.id ? null : cluster.id}
-                onkeydown={(e) => e.key === 'Enter' && (selectedCluster = selectedCluster === cluster.id ? null : cluster.id)}
-              >
-                {#if cluster.count > 1}
-                  <div class="absolute -top-5 left-3">
-                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold"
-                      style="background: {selectedCluster === cluster.id ? cluster.labelColor : 'white'}; color: {selectedCluster === cluster.id ? 'white' : cluster.labelColor}; border: 1.5px solid {cluster.borderColor}; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
-                      {cluster.theme}
-                      <span class="text-[9px] px-1 rounded-full" style="background: rgba(255,255,255,0.25);">{cluster.count}</span>
-                    </span>
-                  </div>
-                {/if}
-              </div>
+        <!-- Voronoi cluster regions (workshop view with AI clusters) -->
+        {#if viewMode === 'workshop-wide' && voronoiRegions.length > 0}
+          <!-- SVG Voronoi polygons -->
+          <svg class="absolute" style="left:0;top:0;width:{CANVAS_W}px;height:{CANVAS_H}px;overflow:visible;pointer-events:none;">
+            {#each voronoiRegions as region}
+              <polygon
+                points={region.polygon.map(p => `${p.x},${p.y}`).join(' ')}
+                fill={selectedCluster === region.id ? region.color.replace('0.10', '0.18') : region.color}
+                stroke={region.borderColor}
+                stroke-width="1.5"
+                stroke-dasharray="8 5"
+                opacity={selectedCluster !== null && selectedCluster !== region.id ? 0.25 : 1}
+                style="pointer-events:fill;cursor:pointer;transition:fill 0.2s,opacity 0.2s"
+                onclick={() => selectedCluster = selectedCluster === region.id ? null : region.id}
+              />
             {/each}
-          {:else if !aiClusterLoading}
-            {#each workshopClusters() as cluster}
-              <div
-                class="absolute rounded-2xl transition-all duration-200 cursor-pointer"
-                style="
-                  left: {cluster.rect.x}px; top: {cluster.rect.y}px;
-                  width: {cluster.rect.w}px; height: {cluster.rect.h}px;
-                  background: {selectedCluster === cluster.id ? cluster.color.replace('0.08', '0.14') : cluster.color};
-                  border: 1.5px dashed {cluster.borderColor};
-                  opacity: {selectedCluster !== null && selectedCluster !== cluster.id ? 0.3 : 1};
-                "
-                role="button" tabindex="0"
-                onclick={() => selectedCluster = selectedCluster === cluster.id ? null : cluster.id}
-                onkeydown={(e) => e.key === 'Enter' && (selectedCluster = selectedCluster === cluster.id ? null : cluster.id)}
-              >
-                <div class="absolute -top-5 left-3">
-                  <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold"
-                    style="background: {selectedCluster === cluster.id ? cluster.labelColor : 'white'}; color: {selectedCluster === cluster.id ? 'white' : cluster.labelColor}; border: 1.5px solid {cluster.borderColor}; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
-                    {cluster.label}
-                    <span class="text-[9px] px-1 rounded-full" style="background: rgba(255,255,255,0.25);">{cluster.count}</span>
-                  </span>
-                </div>
+          </svg>
+
+          <!-- Cluster labels at Voronoi centroids -->
+          {#each voronoiRegions as region}
+            {#if region.count > 1}
+              <div class="absolute" style="left:{region.centroid.x}px;top:{region.centroid.y - (region.count > 3 ? 160 : 120)}px;transform:translateX(-50%);pointer-events:none;z-index:2;">
+                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap"
+                  style="background:{selectedCluster === region.id ? region.labelColor : 'white'};color:{selectedCluster === region.id ? 'white' : region.labelColor};border:1.5px solid {region.borderColor};box-shadow:0 1px 4px rgba(0,0,0,0.10);">
+                  {region.theme}
+                  <span class="text-[9px] px-1 rounded-full" style="background:rgba(255,255,255,0.3);">{region.count}</span>
+                </span>
               </div>
-            {/each}
-          {/if}
+            {/if}
+          {/each}
+
+        {:else if viewMode === 'workshop-wide' && !aiClusterLoading}
+          <!-- Fallback: team-based rectangular clusters while loading -->
+          {#each workshopClusters() as cluster}
+            <div
+              class="absolute rounded-2xl transition-all duration-200 cursor-pointer"
+              style="left:{cluster.rect.x}px;top:{cluster.rect.y}px;width:{cluster.rect.w}px;height:{cluster.rect.h}px;background:{selectedCluster === cluster.id ? cluster.color.replace('0.08','0.14') : cluster.color};border:1.5px dashed {cluster.borderColor};opacity:{selectedCluster !== null && selectedCluster !== cluster.id ? 0.3 : 1};"
+              role="button" tabindex="0"
+              onclick={() => selectedCluster = selectedCluster === cluster.id ? null : cluster.id}
+              onkeydown={(e) => e.key === 'Enter' && (selectedCluster = selectedCluster === cluster.id ? null : cluster.id)}
+            >
+              <div class="absolute -top-5 left-3">
+                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                  style="background:{selectedCluster === cluster.id ? cluster.labelColor : 'white'};color:{selectedCluster === cluster.id ? 'white' : cluster.labelColor};border:1.5px solid {cluster.borderColor};box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                  {cluster.label}
+                  <span class="text-[9px] px-1 rounded-full" style="background:rgba(255,255,255,0.25);">{cluster.count}</span>
+                </span>
+              </div>
+            </div>
+          {/each}
         {/if}
 
         <!-- Use case cards -->
         {#each visibleCards() as card (card.id)}
           {@const cardPos = (viewMode === 'workshop-wide' && clusteredCardPositions[card.id]) ? clusteredCardPositions[card.id] : card.position}
-          {@const inSelectedCluster = selectedCluster === null || (viewMode === 'workshop-wide' && aiClusters.length > 0
-            ? aiClusterRects().find(c => c.useCaseIds.has(card.id))?.id === selectedCluster
+          {@const inSelectedCluster = selectedCluster === null || (viewMode === 'workshop-wide' && voronoiRegions.length > 0
+            ? voronoiRegions.find(r => r.useCaseIds.has(card.id))?.id === selectedCluster
             : workshopClusters().find(c => c.teamId === card.teamId)?.id === selectedCluster)}
           {#if inSelectedCluster}
             <div
