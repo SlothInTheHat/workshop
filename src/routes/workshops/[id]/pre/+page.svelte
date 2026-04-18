@@ -34,6 +34,12 @@
   let savingContext = $state(false);
   let contextSaved = $state(false);
 
+  // Strategic Pillars & Kickoff Summary
+  let generatingPillars = $state(false);
+  let pillarsError = $state('');
+  let generatingSummary = $state(false);
+  let summaryError = $state('');
+
   let launching = $state(false);
 
   const overallProgress = $derived(
@@ -198,6 +204,68 @@
     setTimeout(() => { contextSaved = false; }, 2000);
   }
 
+  async function generatePillars() {
+    if (stats.submittedCount === 0) {
+      pillarsError = 'Need at least one submitted contributor input';
+      return;
+    }
+    generatingPillars = true;
+    pillarsError = '';
+    try {
+      const res = await fetch(`/api/workshops/${workshop.id}/pillars/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        pillarsError = (e as { message?: string }).message ?? 'Failed to generate pillars';
+      } else {
+        const result = await res.json() as { pillars: string[] };
+        workshop = { ...workshop, strategicPillars: result.pillars };
+        activityLog = [{ id: crypto.randomUUID(), workshopId: workshop.id, tenantId: workshop.tenantId, actorName: session.name, action: 'pillars_generated', details: `Generated ${result.pillars.length} pillars`, createdAt: new Date() }, ...activityLog];
+      }
+    } finally {
+      generatingPillars = false;
+    }
+  }
+
+  async function generateSummary() {
+    if (stats.submittedCount === 0) {
+      summaryError = 'Need at least one submitted contributor input';
+      return;
+    }
+    generatingSummary = true;
+    summaryError = '';
+    try {
+      const res = await fetch(`/api/workshops/${workshop.id}/summary/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actorName: session.name })
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        summaryError = (e as { message?: string }).message ?? 'Failed to generate summary';
+      } else {
+        const result = await res.json() as { kickoffSummary: string };
+        workshop = { ...workshop, kickoffSummary: result.kickoffSummary };
+        activityLog = [{ id: crypto.randomUUID(), workshopId: workshop.id, tenantId: workshop.tenantId, actorName: session.name, action: 'summary_generated', details: 'Generated kickoff summary', createdAt: new Date() }, ...activityLog];
+      }
+    } finally {
+      generatingSummary = false;
+    }
+  }
+
+  function downloadSummary() {
+    if (!workshop.kickoffSummary) return;
+    const blob = new Blob([`KICKOFF SUMMARY\n${workshop.title}\n\n${workshop.kickoffSummary}`], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${workshop.title.replace(/[^a-z0-9]/gi, '_')}_kickoff_summary.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function launchWorkshop() {
     if (!confirm('Move this workshop to the live phase? Contributors will no longer be able to edit their inputs.')) return;
     launching = true;
@@ -206,7 +274,11 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'live', actorName: session.name })
     });
-    if (res.ok) workshop = { ...workshop, status: 'live' };
+    if (res.ok) {
+      workshop = { ...workshop, status: 'live' };
+      // Redirect to live workshop
+      window.location.href = `/workshop/${workshop.id}/live`;
+    }
     launching = false;
   }
 </script>
@@ -316,14 +388,69 @@
                 </div>
               {/if}
 
-              {#if workshop.kickoffSummary}
-                <div class="mb-6">
-                  <label class="block text-[13px] text-gray-700 font-medium mb-1.5">Kickoff Summary</label>
+              <!-- Strategic Pillars -->
+              <div class="mb-6">
+                <div class="flex items-center justify-between mb-2">
+                  <label class="block text-[13px] text-gray-700 font-medium">Strategic Pillars</label>
+                  {#if !workshop.strategicPillars || workshop.strategicPillars.length === 0}
+                    <button
+                      onclick={generatePillars}
+                      disabled={generatingPillars || stats.submittedCount === 0}
+                      class="px-3 py-1.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[11px] font-medium transition-colors disabled:opacity-50"
+                    >
+                      {generatingPillars ? 'Generating...' : '✨ Generate Pillars'}
+                    </button>
+                  {/if}
+                </div>
+                {#if pillarsError}
+                  <p class="text-[12px] text-red-600 mb-2">{pillarsError}</p>
+                {/if}
+                {#if workshop.strategicPillars && workshop.strategicPillars.length > 0}
+                  <div class="flex flex-wrap gap-2">
+                    {#each workshop.strategicPillars as pillar}
+                      <span class="px-3 py-1.5 bg-[#E6F4F4] text-[#6B9695] rounded-full text-[12px] font-medium">
+                        {pillar}
+                      </span>
+                    {/each}
+                  </div>
+                {:else}
+                  <p class="text-[12px] text-gray-400 italic">Generate strategic pillars from contributor inputs</p>
+                {/if}
+              </div>
+
+              <!-- Kickoff Summary -->
+              <div class="mb-6">
+                <div class="flex items-center justify-between mb-2">
+                  <label class="block text-[13px] text-gray-700 font-medium">Kickoff Summary</label>
+                  <div class="flex gap-2">
+                    {#if workshop.kickoffSummary}
+                      <button
+                        onclick={downloadSummary}
+                        class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-[11px] font-medium transition-colors"
+                      >
+                        📥 Download
+                      </button>
+                    {/if}
+                    <button
+                      onclick={generateSummary}
+                      disabled={generatingSummary || stats.submittedCount === 0}
+                      class="px-3 py-1.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[11px] font-medium transition-colors disabled:opacity-50"
+                    >
+                      {generatingSummary ? 'Generating...' : workshop.kickoffSummary ? '🔄 Regenerate' : '✨ Generate Summary'}
+                    </button>
+                  </div>
+                </div>
+                {#if summaryError}
+                  <p class="text-[12px] text-red-600 mb-2">{summaryError}</p>
+                {/if}
+                {#if workshop.kickoffSummary}
                   <div class="bg-[#F0F9F9] border border-[#6B9695]/20 rounded-lg p-4">
                     <p class="text-[13px] text-gray-700 whitespace-pre-line">{workshop.kickoffSummary}</p>
                   </div>
-                </div>
-              {/if}
+                {:else}
+                  <p class="text-[12px] text-gray-400 italic">Generate a comprehensive kickoff summary from all contributor inputs</p>
+                {/if}
+              </div>
 
               <h3 class="text-[18px] text-gray-900 font-semibold mb-4">Contributor Status</h3>
               <div class="space-y-2">
@@ -361,27 +488,41 @@
               {#if participants.length > 0}
                 <div class="space-y-1 mb-6">
                   {#each participants as p}
-                    <div class="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
-                      <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-full bg-[#E6F4F4] flex items-center justify-center text-[13px] font-semibold text-[#6B9695]">
-                          {p.name.charAt(0).toUpperCase()}
+                    <div class="py-3 border-b border-gray-100 last:border-0">
+                      <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-3">
+                          <div class="w-8 h-8 rounded-full bg-[#E6F4F4] flex items-center justify-center text-[13px] font-semibold text-[#6B9695]">
+                            {p.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p class="text-[13px] text-gray-900 font-medium">{p.name}</p>
+                            {#if p.email}
+                              <p class="text-[11px] text-gray-500">{p.email}</p>
+                            {/if}
+                          </div>
                         </div>
-                        <div>
-                          <p class="text-[13px] text-gray-900 font-medium">{p.name}</p>
-                          {#if p.email}
-                            <p class="text-[11px] text-gray-500">{p.email}</p>
+                        <div class="flex items-center gap-3">
+                          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium {roleBadgeColor(p.role)}">{roleLabel(p.role)}</span>
+                          {#if p.role === 'contributor'}
+                            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium {statusColor(p.inputStatus)}">{statusLabel(p.inputStatus)}</span>
                           {/if}
+                          <button onclick={() => removeParticipant(p.id, p.name)} class="text-gray-300 hover:text-red-400 transition-colors ml-1 text-[12px]">
+                            Remove
+                          </button>
                         </div>
                       </div>
-                      <div class="flex items-center gap-3">
-                        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium {roleBadgeColor(p.role)}">{roleLabel(p.role)}</span>
-                        {#if p.role === 'contributor'}
-                          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium {statusColor(p.inputStatus)}">{statusLabel(p.inputStatus)}</span>
-                        {/if}
-                        <button onclick={() => removeParticipant(p.id, p.name)} class="text-gray-300 hover:text-red-400 transition-colors ml-1 text-[12px]">
-                          Remove
-                        </button>
-                      </div>
+
+                      {#if p.role === 'contributor'}
+                        <div class="ml-11 flex items-center gap-3">
+                          <div class="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
+                            <div
+                              class="h-full rounded-full transition-all duration-500 {p.completionPct === 100 ? 'bg-green-500' : p.completionPct > 0 ? 'bg-amber-500' : 'bg-gray-300'}"
+                              style="width: {p.completionPct}%"
+                            ></div>
+                          </div>
+                          <span class="text-[11px] text-gray-500 font-medium min-w-[3ch] text-right">{p.completionPct}%</span>
+                        </div>
+                      {/if}
                     </div>
                   {/each}
                 </div>

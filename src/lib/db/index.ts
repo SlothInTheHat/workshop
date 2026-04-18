@@ -1,10 +1,24 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
-import pg from 'pg';
-import { DATABASE_URL } from '$env/static/private';
+import { Pool } from 'pg';
 import * as schema from './schema.js';
 
-const pool = new pg.Pool({ connectionString: DATABASE_URL });
+let _db: ReturnType<typeof drizzle> | null = null;
 
-export const db = drizzle(pool, { schema });
+export function initDb(connectionString: string) {
+	if (_db) return _db;
+	try {
+		const pool = new Pool({ connectionString });
+		_db = drizzle(pool, { schema });
+		console.log('[DB] Connected via pg');
+	} catch (err) {
+		console.error('[DB] Connection failed:', err);
+	}
+	return _db;
+}
 
-export type DB = typeof db;
+export function getDb() {
+	return _db;
+}
+
+export { schema };
+export type DB = typeof _db;

@@ -9,10 +9,11 @@ function calcCompletion(body: Partial<typeof schema.contributorInputs.$inferInse
 		body.painPoints,
 		body.currentWorkflow,
 		body.constraints,
-		body.successCriteria
+		body.successCriteria,
+		body.strategicPillars
 	];
 	const filled = fields.filter((f) => f && String(f).trim().length > 0).length;
-	return Math.round((filled / 5) * 100);
+	return Math.round((filled / 6) * 100);
 }
 
 // GET /api/workshops/[id]/inputs/[uid] — [uid] is participantId
@@ -46,6 +47,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		currentWorkflow?: string;
 		constraints?: string;
 		successCriteria?: string;
+		strategicPillars?: string;
 	};
 
 	const existing = await db
@@ -79,6 +81,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		currentWorkflow: body.currentWorkflow ?? null,
 		constraints: body.constraints ?? null,
 		successCriteria: body.successCriteria ?? null,
+		strategicPillars: body.strategicPillars ?? null,
 		completionPct: completion,
 		status: completion === 0 ? 'pending' : completion === 100 ? 'completed' : 'in_progress'
 	});
@@ -106,6 +109,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		currentWorkflow?: string;
 		constraints?: string;
 		successCriteria?: string;
+		strategicPillars?: string;
 		submit?: boolean;
 		actorName?: string;
 	};
@@ -128,7 +132,8 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		painPoints: body.painPoints ?? current.painPoints,
 		currentWorkflow: body.currentWorkflow ?? current.currentWorkflow,
 		constraints: body.constraints ?? current.constraints,
-		successCriteria: body.successCriteria ?? current.successCriteria
+		successCriteria: body.successCriteria ?? current.successCriteria,
+		strategicPillars: body.strategicPillars ?? current.strategicPillars
 	};
 
 	const completion = calcCompletion(merged);

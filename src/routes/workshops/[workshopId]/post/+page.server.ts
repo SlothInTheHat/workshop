@@ -1,20 +1,9 @@
-import { error, redirect } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { getSession } from '$lib/session';
 
-export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
+export const load: PageServerLoad = async ({ params, fetch }) => {
   const workshopId = params.workshopId;
-
-  // Check session role
-  const session = getSession(cookies);
-  if (!session) {
-    redirect(303, '/join');
-  }
-
-  // If contributor, redirect to contributor view
-  if (session.role === 'contributor') {
-    redirect(303, `/workshops/${workshopId}/post/contributor`);
-  }
+  console.log('[POST-WORKSHOP] Loading for workshopId:', workshopId);
 
   try {
     // Fetch workshop details

@@ -10,6 +10,7 @@
   let currentWorkflow = $state(data.existingInput?.currentWorkflow ?? '');
   let constraints = $state(data.existingInput?.constraints ?? '');
   let successCriteria = $state(data.existingInput?.successCriteria ?? '');
+  let strategicPillars = $state(data.existingInput?.strategicPillars ?? '');
 
   let saveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
   let submitting = $state(false);
@@ -22,8 +23,8 @@
   const isFilled = (v: string) => v.trim().length > 0;
 
   const completionPct = $derived(() => {
-    const fields = [goals, painPoints, currentWorkflow, constraints, successCriteria];
-    return Math.round((fields.filter(f => isFilled(f)).length / 5) * 100);
+    const fields = [goals, painPoints, currentWorkflow, constraints, successCriteria, strategicPillars];
+    return Math.round((fields.filter(f => isFilled(f)).length / 6) * 100);
   });
 
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -37,11 +38,11 @@
 
   async function autoSave() {
     if (submitted) return;
-    const hasContent = [goals, painPoints, currentWorkflow, constraints, successCriteria].some(f => isFilled(f));
+    const hasContent = [goals, painPoints, currentWorkflow, constraints, successCriteria, strategicPillars].some(f => isFilled(f));
     if (!hasContent) { saveStatus = 'idle'; return; }
 
     const url = `/api/workshops/${workshop.id}/inputs/${participant?.id}`;
-    const body = { goalsAndObjectives: goals, painPoints, currentWorkflow, constraints, successCriteria, actorName: session.name };
+    const body = { goalsAndObjectives: goals, painPoints, currentWorkflow, constraints, successCriteria, strategicPillars, actorName: session.name };
 
     try {
       if (!inputCreated) {
@@ -68,11 +69,11 @@
   }
 
   async function submitInput() {
-    if (completionPct() < 100) { submitError = 'Please fill in all 5 sections before submitting.'; return; }
+    if (completionPct() < 100) { submitError = 'Please fill in all 6 sections before submitting.'; return; }
     submitError = '';
     submitting = true;
     const url = `/api/workshops/${workshop.id}/inputs/${participant?.id}`;
-    const body = { goalsAndObjectives: goals, painPoints, currentWorkflow, constraints, successCriteria, submit: true, actorName: session.name, tenantId: workshop.tenantId };
+    const body = { goalsAndObjectives: goals, painPoints, currentWorkflow, constraints, successCriteria, strategicPillars, submit: true, actorName: session.name, tenantId: workshop.tenantId };
 
     try {
       const method = inputCreated ? 'PATCH' : 'POST';
@@ -125,6 +126,13 @@
       placeholder: 'e.g. Reduce intake time from 45 min to 20 min, 95% data accuracy...',
       get value() { return successCriteria; },
       set value(v: string) { successCriteria = v; scheduleAutoSave(); }
+    },
+    {
+      label: 'Strategic Pillars',
+      description: 'What are the key strategic priorities or themes that should guide this workshop? List 3-5 pillars.',
+      placeholder: 'e.g. Patient Experience, Operational Efficiency, Staff Satisfaction, Data Quality, Cost Reduction...',
+      get value() { return strategicPillars; },
+      set value(v: string) { strategicPillars = v; scheduleAutoSave(); }
     },
   ];
 </script>

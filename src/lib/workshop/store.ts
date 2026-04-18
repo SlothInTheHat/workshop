@@ -481,25 +481,21 @@ function seed(): void {
   workshops.set(workshopId, workshop);
 
   const pSarah: Participant = { id: 'p1', workshopId, name: 'Dr. Sarah Chen', role: 'Clinical Lead', presence: 'in-room', initials: 'SC', color: 'bg-green-500' };
-  const pMichael: Participant = { id: 'p2', workshopId, name: 'Michael Torres', role: 'Ops Director', presence: 'remote', initials: 'MT', color: 'bg-blue-500' };
-  const pJamie: Participant = { id: 'p3', workshopId, name: 'Jamie Liu', role: 'Data Analyst', presence: 'remote', initials: 'JL', color: 'bg-purple-500' };
   participants.set(pSarah.id, pSarah);
-  participants.set(pMichael.id, pMichael);
-  participants.set(pJamie.id, pJamie);
 
-  const teamA = createTeam(workshopId, 'Team A', [pSarah.id, pJamie.id]);
-  const teamB = createTeam(workshopId, 'Team B', [pMichael.id]);
+  const teamA = createTeam(workshopId, 'Team A', [pSarah.id]);
+  const teamB = createTeam(workshopId, 'Team B', []);
 
   const seedCases: Array<Parameters<typeof createUseCase>[0]> = [
-    { workshopId, teamId: teamA.id, title: 'Intake form duplication', summary: 'Multiple manual re-entry points across EHR systems', value: 'High', viability: 'Medium', visibility: 'Internal', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 80, y: 60 }, collaborators: [pSarah.name, pJamie.name] },
-    { workshopId, teamId: teamA.id, title: 'Insurance verification lag', summary: 'Manual insurance checks delay intake by 24-48 hours', value: 'Medium', viability: 'High', visibility: 'Internal', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 420, y: 80 } },
-    { workshopId, teamId: teamA.id, title: 'Duplicate patient records', summary: 'Cross-system duplicates causing clinical confusion and delays', value: 'High', viability: 'Low', visibility: 'Cross-Silo', addedBy: pJamie.name, participantId: pJamie.id, position: { x: 170, y: 190 } },
-    { workshopId, teamId: teamA.id, title: 'Manual fax processing', summary: 'Prior auth requests require manual fax review', value: 'Medium', viability: 'High', visibility: 'Internal', addedBy: pJamie.name, participantId: pJamie.id, position: { x: 600, y: 70 } },
-    { workshopId, teamId: teamB.id, title: 'EHR data sync delays', summary: 'Patient data not syncing in real-time between systems', value: 'High', viability: 'Medium', visibility: 'Cross-Silo', addedBy: pMichael.name, participantId: pMichael.id, position: { x: 290, y: 60 } },
-    { workshopId, teamId: teamB.id, title: 'Referral letter generation', summary: 'Physicians spending 20 min per referral on paperwork', value: 'Medium', viability: 'High', visibility: 'Internal', addedBy: pMichael.name, participantId: pMichael.id, position: { x: 700, y: 200 } },
-    { workshopId, teamId: teamB.id, title: 'Scheduling conflicts', summary: 'No real-time visibility across department schedules', value: 'Medium', viability: 'High', visibility: 'Internal', addedBy: pMichael.name, participantId: pMichael.id, position: { x: 80, y: 420 } },
-    { workshopId, teamId: teamA.id, title: 'Care coordination gaps', summary: 'Post-discharge follow-up falls through the cracks', value: 'High', viability: 'Medium', visibility: 'Cross-Silo', addedBy: pJamie.name, participantId: pJamie.id, position: { x: 310, y: 400 } },
-    { workshopId, teamId: teamA.id, title: 'Fragmented care notes', summary: 'Clinical notes scattered across 3 separate platforms', value: 'High', viability: 'Medium', visibility: 'Restricted', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 190, y: 540 } },
+    { workshopId, teamId: teamA.id, title: 'Intake Form Auto-Fill', summary: 'Use AI to pre-populate intake forms from referral documents, reducing manual entry.', value: 'High', viability: 'High', visibility: 'Internal', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 80, y: 60 }, collaborators: [pSarah.name] },
+    { workshopId, teamId: teamA.id, title: 'Insurance Verification Bot', summary: 'Automate real-time insurance eligibility checks at point of scheduling.', value: 'High', viability: 'Medium', visibility: 'Internal', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 320, y: 60 } },
+    { workshopId, teamId: teamA.id, title: 'Duplicate Record Detector', summary: 'ML model to flag potential duplicate patient records across EHR systems.', value: 'Medium', viability: 'Medium', visibility: 'Cross-Silo', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 80, y: 300 } },
+    { workshopId, teamId: teamA.id, title: 'Fax-to-Referral Extraction', summary: 'OCR + NLP pipeline to convert incoming faxes into structured referral records.', value: 'High', viability: 'High', visibility: 'Internal', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 320, y: 300 } },
+    { workshopId, teamId: teamA.id, title: 'EHR Data Sync Monitor', summary: 'Real-time alerting when EHR sync jobs fail or produce inconsistent records.', value: 'Medium', viability: 'High', visibility: 'Internal', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 560, y: 60 } },
+    { workshopId, teamId: teamB.id, title: 'Referral Status Tracker', summary: 'Automated outbound status updates to referring physicians via portal or SMS.', value: 'High', viability: 'Medium', visibility: 'Restricted', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 80, y: 60 } },
+    { workshopId, teamId: teamB.id, title: 'Smart Scheduling Assistant', summary: 'AI that resolves scheduling conflicts and optimises appointment slots.', value: 'High', viability: 'Low', visibility: 'Internal', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 320, y: 60 } },
+    { workshopId, teamId: teamB.id, title: 'Care Gap Identification', summary: 'Predictive model to surface patients overdue for follow-up or preventive care.', value: 'High', viability: 'Medium', visibility: 'Cross-Silo', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 80, y: 300 } },
+    { workshopId, teamId: teamB.id, title: 'Clinical Notes Summariser', summary: 'LLM summarisation of lengthy clinical notes into concise SOAP-format briefs.', value: 'Medium', viability: 'High', visibility: 'Restricted', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 320, y: 300 } },
   ];
 
   for (const uc of seedCases) {

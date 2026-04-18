@@ -35,7 +35,9 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 	if (workshopRows.length === 0) error(404, 'Workshop not found');
 	const workshop = workshopRows[0];
 
-	if (workshop.status !== 'pre') {
+	if (workshop.status === 'live') {
+		redirect(303, `/workshop/${params.id}/live`);
+	} else if (workshop.status !== 'pre') {
 		redirect(303, '/workshops');
 	}
 

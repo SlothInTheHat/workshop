@@ -129,6 +129,7 @@ export const useCases = pgTable('use_cases', {
     .notNull()
     .references(() => insights.id),
   collaborators: text('collaborators').array().notNull().default([]),
+  pillarTags: jsonb('pillar_tags').$type<string[]>().default([]),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
@@ -196,6 +197,7 @@ export const preWorkshops = pgTable('pre_workshops', {
   leadFacilitatorName: text('lead_facilitator_name'),
   aiContext: text('ai_context'),
   kickoffSummary: text('kickoff_summary'),
+  strategicPillars: text('strategic_pillars').array(),
   facilitatorCode: text('facilitator_code'),
   contributorCode: text('contributor_code'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -223,6 +225,7 @@ export const contributorInputs = pgTable('contributor_inputs', {
   currentWorkflow: text('current_workflow'),
   constraints: text('constraints'),
   successCriteria: text('success_criteria'),
+  strategicPillars: text('strategic_pillars'),
   completionPct: integer('completion_pct').notNull().default(0),
   status: text('status').notNull().default('pending'),
   submittedAt: timestamp('submitted_at'),

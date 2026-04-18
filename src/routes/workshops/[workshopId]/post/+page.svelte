@@ -10,17 +10,18 @@
   type VotingPhase = 'round1' | 'round2' | 'final';
 
   let activePhase = $state<VotingPhase>('round1');
-  let showAINotes = $state(false);
   let loadingUpvote = $state<Record<string, boolean>>({});
   let generatingAI = $state(false);
   let aiSummary = $state<any>(null);
-  let aiNotesContent = $state<any>(null);
   let errorMessage = $state<string | null>(null);
   let aiSummaryError = $state(false);
   let whyItMattersCache = $state<Map<string, string>>(new Map());
   let loadingWhyItMatters = $state<Set<string>>(new Set());
   let whyItMattersErrors = $state<Set<string>>(new Set());
   let downloadingReport = $state(false);
+
+  // Strategic Pillars state
+  let expandedPillars = $state<Set<string>>(new Set());
 
   // Local state for usecases (will update from API)
   let useCases = $state(data.useCases || []);
@@ -186,10 +187,59 @@
     }))
   );
 
-  // Strategic pillars from workshop data
+  // Strategic pillars from workshop data (hardcoded examples if none exist)
   const strategicPillars = $derived(
-    (workshop?.strategicPillars as string[]) || []
+    (workshop?.strategicPillars as string[] && (workshop.strategicPillars as string[]).length > 0)
+      ? (workshop.strategicPillars as string[])
+      : ["Reduce OPEX", "Improve Patient Experience", "Regulatory Compliance", "Staff Productivity"]
   );
+
+  // Group use cases by pillar
+  const useCasesByPillar = $derived(() => {
+    const grouped = new Map<string, any[]>();
+    const untagged: any[] = [];
+
+    useCases.forEach((uc: any) => {
+      const tags = uc.pillarTags || [];
+      if (tags.length === 0) {
+        untagged.push(uc);
+      } else {
+        tags.forEach((tag: string) => {
+          if (!grouped.has(tag)) {
+            grouped.set(tag, []);
+          }
+          grouped.get(tag)!.push(uc);
+        });
+      }
+    });
+
+    return { grouped, untagged };
+  });
+
+  // Pillar summary stats
+  const pillarStats = $derived(() => {
+    const { grouped } = useCasesByPillar();
+    const totalCases = useCases.length;
+    const pillarsCovered = grouped.size;
+    let mostPopular = { name: '', count: 0 };
+
+    grouped.forEach((cases, pillar) => {
+      if (cases.length > mostPopular.count) {
+        mostPopular = { name: pillar, count: cases.length };
+      }
+    });
+
+    return { totalCases, pillarsCovered, mostPopular };
+  });
+
+  function togglePillar(pillar: string) {
+    if (expandedPillars.has(pillar)) {
+      expandedPillars.delete(pillar);
+    } else {
+      expandedPillars.add(pillar);
+    }
+    expandedPillars = expandedPillars;
+  }
 
   async function handleUpvote(useCaseId: string) {
     if (loadingUpvote[useCaseId] || hasFinishedVoting) return;
@@ -290,7 +340,6 @@
         // Content is now a structured JSON object
         aiSummary = summary.content;
         aiSummaryError = false;
-        aiNotesContent = summary.content;
 
         // After summary is generated, reload use cases to get whyItMatters
         await loadUseCases();
@@ -305,13 +354,6 @@
       aiSummaryError = true;
     } finally {
       generatingAI = false;
-    }
-  }
-
-  async function toggleAINotes() {
-    showAINotes = !showAINotes;
-    if (showAINotes && !aiNotesContent) {
-      await generateAISummary();
     }
   }
 
@@ -479,7 +521,7 @@
       yPos = (doc as any).lastAutoTable.finalY + 15;
 
       // AI NOTES SECTION
-      if (aiNotesContent) {
+      if (aiSummary) {
         if (yPos > 240) {
           doc.addPage();
           yPos = 20;
@@ -497,8 +539,8 @@
         yPos += 5;
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        if (aiNotesContent.overview) {
-          const overviewLines = doc.splitTextToSize(aiNotesContent.overview, 170);
+        if (aiSummary.overview) {
+          const overviewLines = doc.splitTextToSize(aiSummary.overview, 170);
           doc.text(overviewLines, 20, yPos);
           yPos += overviewLines.length * 4 + 6;
         }
@@ -515,8 +557,8 @@
         yPos += 5;
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        if (aiNotesContent.keyBottlenecks) {
-          const bottleneckLines = doc.splitTextToSize(aiNotesContent.keyBottlenecks, 170);
+        if (aiSummary.keyBottlenecks) {
+          const bottleneckLines = doc.splitTextToSize(aiSummary.keyBottlenecks, 170);
           doc.text(bottleneckLines, 20, yPos);
           yPos += bottleneckLines.length * 4 + 6;
         }
@@ -533,8 +575,8 @@
         yPos += 5;
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        if (aiNotesContent.aiSuggestedThemes) {
-          const themesLines = doc.splitTextToSize(aiNotesContent.aiSuggestedThemes, 170);
+        if (aiSummary.aiSuggestedThemes) {
+          const themesLines = doc.splitTextToSize(aiSummary.aiSuggestedThemes, 170);
           doc.text(themesLines, 20, yPos);
           yPos += themesLines.length * 4 + 6;
         }
@@ -551,8 +593,8 @@
         yPos += 5;
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        if (aiNotesContent.recommendedFocusAreas) {
-          const focusLines = doc.splitTextToSize(aiNotesContent.recommendedFocusAreas, 170);
+        if (aiSummary.recommendedFocusAreas) {
+          const focusLines = doc.splitTextToSize(aiSummary.recommendedFocusAreas, 170);
           doc.text(focusLines, 20, yPos);
           yPos += focusLines.length * 4;
         }
@@ -616,129 +658,6 @@
             Try Again
           </button>
         {/if}
-      </div>
-    {/if}
-
-    <!-- Toggle AI Notes Section -->
-    <button
-      onclick={toggleAINotes}
-      class="w-full bg-gray-50 border border-gray-200 rounded-lg p-3.5 flex items-center justify-between hover:bg-gray-100 transition-colors mb-4"
-      style="box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02)"
-    >
-      <span
-        class="text-[13px] text-gray-700"
-        style="font-family: Inter, sans-serif; font-weight: 500"
-      >
-        ▸ Toggle AI Notes
-      </span>
-      {#if generatingAI}
-        <div class="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-      {:else if showAINotes}
-        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
-        </svg>
-      {:else}
-        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-        </svg>
-      {/if}
-    </button>
-
-    <!-- AI Notes Panel -->
-    {#if showAINotes}
-      <div class="bg-white border border-gray-200 rounded-lg p-5 mb-4" style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04)">
-        <div class="space-y-4">
-          <div>
-            <h4
-              class="text-[12px] text-gray-900 mb-1.5"
-              style="font-family: Inter, sans-serif; font-weight: 600"
-            >
-              Workshop Overview
-            </h4>
-            <p
-              class="text-[11px] text-gray-600 leading-relaxed"
-              style="font-family: Inter, sans-serif; font-weight: 400"
-            >
-              {aiNotesContent?.overview || `${workshop?.title || 'Workshop'} focused on streamlining processes and reducing administrative bottlenecks.`}
-            </p>
-          </div>
-
-          <div>
-            <h4
-              class="text-[12px] text-gray-900 mb-1.5"
-              style="font-family: Inter, sans-serif; font-weight: 600"
-            >
-              Key Bottlenecks Identified
-            </h4>
-            <p
-              class="text-[11px] text-gray-600 leading-relaxed"
-              style="font-family: Inter, sans-serif; font-weight: 400"
-            >
-              {#if aiNotesContent?.keyBottlenecks}
-                {aiNotesContent.keyBottlenecks}
-              {:else}
-                <span class="text-gray-400 italic">No bottlenecks identified yet</span>
-              {/if}
-            </p>
-          </div>
-
-          <div>
-            <h4
-              class="text-[12px] text-gray-900 mb-1.5"
-              style="font-family: Inter, sans-serif; font-weight: 600"
-            >
-              AI Suggested Themes
-            </h4>
-            <p
-              class="text-[11px] text-gray-600 leading-relaxed"
-              style="font-family: Inter, sans-serif; font-weight: 400"
-            >
-              {#if aiNotesContent?.aiSuggestedThemes}
-                {aiNotesContent.aiSuggestedThemes}
-              {:else}
-                <span class="text-gray-400 italic">No themes identified yet</span>
-              {/if}
-            </p>
-          </div>
-
-          <div>
-            <h4
-              class="text-[12px] text-gray-900 mb-1.5"
-              style="font-family: Inter, sans-serif; font-weight: 600"
-            >
-              Cross-Workshop Signals
-            </h4>
-            <p
-              class="text-[11px] text-gray-600 leading-relaxed"
-              style="font-family: Inter, sans-serif; font-weight: 400"
-            >
-              {#if aiNotesContent?.crossWorkshopSignals}
-                {aiNotesContent.crossWorkshopSignals}
-              {:else}
-                <span class="text-gray-400 italic">No cross-workshop signals identified yet</span>
-              {/if}
-            </p>
-          </div>
-
-          <div>
-            <h4
-              class="text-[12px] text-gray-900 mb-1.5"
-              style="font-family: Inter, sans-serif; font-weight: 600"
-            >
-              Recommended Focus Areas
-            </h4>
-            <p
-              class="text-[11px] text-gray-600 leading-relaxed"
-              style="font-family: Inter, sans-serif; font-weight: 400"
-            >
-              {#if aiNotesContent?.recommendedFocusAreas}
-                {aiNotesContent.recommendedFocusAreas}
-              {:else}
-                <span class="text-gray-400 italic">No focus areas recommended yet</span>
-              {/if}
-            </p>
-          </div>
-        </div>
       </div>
     {/if}
 
@@ -911,11 +830,22 @@
                 {/if}
 
                 <p
-                  class="text-[13px] text-gray-600"
+                  class="text-[13px] text-gray-600 mb-2"
                   style="font-family: Inter, sans-serif; font-weight: 400"
                 >
                   {useCase.description}
                 </p>
+
+                <!-- Pillar Tags -->
+                {#if useCases.find((uc: any) => uc.id === useCase.id)?.pillarTags && useCases.find((uc: any) => uc.id === useCase.id).pillarTags.length > 0}
+                  <div class="flex flex-wrap gap-1.5 mt-2">
+                    {#each useCases.find((uc: any) => uc.id === useCase.id).pillarTags as tag}
+                      <span class="px-2 py-0.5 bg-[#E6F4F4] text-[#6B9695] rounded text-[10px]" style="font-family: Inter, sans-serif; font-weight: 600">
+                        {tag}
+                      </span>
+                    {/each}
+                  </div>
+                {/if}
               </div>
 
               <button
@@ -1074,11 +1004,22 @@
                 {/if}
 
                 <p
-                  class="text-[13px] text-gray-600 mb-4"
+                  class="text-[13px] text-gray-600 mb-2"
                   style="font-family: Inter, sans-serif; font-weight: 400"
                 >
                   {useCase.description}
                 </p>
+
+                <!-- Pillar Tags -->
+                {#if useCases.find((uc: any) => uc.id === useCase.id)?.pillarTags && useCases.find((uc: any) => uc.id === useCase.id).pillarTags.length > 0}
+                  <div class="flex flex-wrap gap-1.5">
+                    {#each useCases.find((uc: any) => uc.id === useCase.id).pillarTags as tag}
+                      <span class="px-2 py-0.5 bg-[#E6F4F4] text-[#6B9695] rounded text-[10px]" style="font-family: Inter, sans-serif; font-weight: 600">
+                        {tag}
+                      </span>
+                    {/each}
+                  </div>
+                {/if}
               </div>
 
               <!-- Crowd Score -->
@@ -1298,36 +1239,6 @@
           </div>
         </div>
 
-        <!-- Strategic Alignment -->
-        <div class="bg-white rounded-lg border border-gray-200 p-6 mb-6" style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04)">
-          <h3
-            class="text-[16px] text-gray-900 mb-4"
-            style="font-family: Inter, sans-serif; font-weight: 600"
-          >
-            Alignment with Client Strategic Pillars
-          </h3>
-          <p
-            class="text-[13px] text-gray-600 mb-4"
-            style="font-family: Inter, sans-serif; font-weight: 400"
-          >
-            The identified opportunities align with the following strategic pillars defined during pre-workshop setup:
-          </p>
-          <div class="flex flex-wrap gap-2">
-            {#each strategicPillars as pillar}
-              <div
-                class="inline-flex items-center px-3 py-2 bg-[#F0F9F9] border border-[#C7E0DF] rounded-md"
-              >
-                <span
-                  class="text-[12px] text-[#4A7A79]"
-                  style="font-family: Inter, sans-serif; font-weight: 500"
-                >
-                  {pillar}
-                </span>
-              </div>
-            {/each}
-          </div>
-        </div>
-
         <!-- Value vs Viability Chart -->
         <div class="bg-white rounded-lg border border-gray-200 p-6" style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04)">
           <h3
@@ -1385,6 +1296,195 @@
           </div>
         </div>
       {/if}
+
+      <!-- STRATEGIC PILLARS SECTION -->
+      <div class="bg-white rounded-lg border border-gray-200 p-6 mt-8" style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04)">
+        <h3
+          class="text-[18px] text-gray-900 mb-4"
+          style="font-family: Inter, sans-serif; font-weight: 600"
+        >
+          Strategic Pillars Analysis
+        </h3>
+
+        <!-- Summary Strip -->
+        <div class="grid grid-cols-3 gap-4 mb-6">
+          <div class="bg-[#F0F9F9] rounded-lg p-4">
+            <p class="text-[11px] text-gray-600 mb-1" style="font-family: Inter, sans-serif; font-weight: 500">
+              Total Use Cases
+            </p>
+            <p class="text-[24px] text-[#6B9695]" style="font-family: Inter, sans-serif; font-weight: 600">
+              {pillarStats().totalCases}
+            </p>
+          </div>
+          <div class="bg-[#F0F9F9] rounded-lg p-4">
+            <p class="text-[11px] text-gray-600 mb-1" style="font-family: Inter, sans-serif; font-weight: 500">
+              Pillars Covered
+            </p>
+            <p class="text-[24px] text-[#6B9695]" style="font-family: Inter, sans-serif; font-weight: 600">
+              {pillarStats().pillarsCovered}
+            </p>
+          </div>
+          <div class="bg-[#F0F9F9] rounded-lg p-4">
+            <p class="text-[11px] text-gray-600 mb-1" style="font-family: Inter, sans-serif; font-weight: 500">
+              Most Popular Pillar
+            </p>
+            <p class="text-[12px] text-[#6B9695] truncate" style="font-family: Inter, sans-serif; font-weight: 600">
+              {pillarStats().mostPopular.name || 'None'} ({pillarStats().mostPopular.count})
+            </p>
+          </div>
+        </div>
+
+        <!-- Pillars Accordions -->
+        <div class="space-y-3">
+          {#each strategicPillars as pillar}
+            {@const cases = useCasesByPillar().grouped.get(pillar) || []}
+            {@const isExpanded = expandedPillars.has(pillar)}
+
+            <div class="border border-gray-200 rounded-lg overflow-hidden">
+              <button
+                onclick={() => togglePillar(pillar)}
+                class="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors border-l-4 border-[#6B9695]"
+              >
+                <div class="flex items-center gap-3">
+                  <span class="text-[14px] text-gray-900" style="font-family: Inter, sans-serif; font-weight: 600">
+                    {pillar}
+                  </span>
+                  <span class="px-2 py-1 bg-[#E6F4F4] text-[#6B9695] rounded-full text-[11px]" style="font-family: Inter, sans-serif; font-weight: 600">
+                    {cases.length} {cases.length === 1 ? 'use case' : 'use cases'}
+                  </span>
+                </div>
+                <svg
+                  class="w-5 h-5 text-gray-500 transition-transform {isExpanded ? 'rotate-180' : ''}"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {#if isExpanded && cases.length > 0}
+                <div class="p-4 pt-0 space-y-3">
+                  {#each cases as useCase}
+                    {@const stackRankEntry = stackRank.find((sr: any) => sr.id === useCase.id)}
+                    <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                      <div class="flex items-start justify-between mb-2">
+                        <h4 class="text-[14px] text-gray-900 flex-1" style="font-family: Inter, sans-serif; font-weight: 600">
+                          {useCase.title}
+                        </h4>
+                        <span class="ml-3 px-2 py-1 bg-[#6B9695] text-white rounded text-[10px]" style="font-family: Inter, sans-serif; font-weight: 600">
+                          {pillar}
+                        </span>
+                      </div>
+
+                      {#if useCase.addedBy}
+                        <div class="flex items-center gap-1.5 mb-2">
+                          <div class="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white rounded-full">
+                            <svg class="w-3 h-3 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+                            </svg>
+                            <span class="text-[11px] text-gray-700" style="font-family: Inter, sans-serif; font-weight: 500">
+                              {useCase.addedBy}
+                            </span>
+                          </div>
+                        </div>
+                      {/if}
+
+                      <div class="flex items-center gap-4 text-[12px] text-gray-600">
+                        <div class="flex items-center gap-1">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                          </svg>
+                          <span style="font-family: Inter, sans-serif; font-weight: 500">{useCase.upvotes || 0}</span>
+                        </div>
+                        {#if stackRankEntry && stackRankEntry.finalScore}
+                          <div class="flex items-center gap-1">
+                            <span style="font-family: Inter, sans-serif; font-weight: 400">Final Score:</span>
+                            <span class="text-[#6B9695]" style="font-family: Inter, sans-serif; font-weight: 600">
+                              {Math.round(stackRankEntry.finalScore)}
+                            </span>
+                          </div>
+                        {/if}
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/each}
+
+          <!-- Untagged Section -->
+          {#if useCasesByPillar().untagged.length > 0}
+            {@const isExpanded = expandedPillars.has('__untagged__')}
+            <div class="border border-gray-200 rounded-lg overflow-hidden">
+              <button
+                onclick={() => togglePillar('__untagged__')}
+                class="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors border-l-4 border-gray-400"
+              >
+                <div class="flex items-center gap-3">
+                  <span class="text-[14px] text-gray-700 italic" style="font-family: Inter, sans-serif; font-weight: 600">
+                    Untagged
+                  </span>
+                  <span class="px-2 py-1 bg-gray-200 text-gray-700 rounded-full text-[11px]" style="font-family: Inter, sans-serif; font-weight: 600">
+                    {useCasesByPillar().untagged.length} {useCasesByPillar().untagged.length === 1 ? 'use case' : 'use cases'}
+                  </span>
+                </div>
+                <svg
+                  class="w-5 h-5 text-gray-500 transition-transform {isExpanded ? 'rotate-180' : ''}"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {#if isExpanded}
+                <div class="p-4 pt-0 space-y-3">
+                  {#each useCasesByPillar().untagged as useCase}
+                    {@const stackRankEntry = stackRank.find((sr: any) => sr.id === useCase.id)}
+                    <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                      <h4 class="text-[14px] text-gray-900 mb-2" style="font-family: Inter, sans-serif; font-weight: 600">
+                        {useCase.title}
+                      </h4>
+
+                      {#if useCase.addedBy}
+                        <div class="flex items-center gap-1.5 mb-2">
+                          <div class="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white rounded-full">
+                            <svg class="w-3 h-3 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+                            </svg>
+                            <span class="text-[11px] text-gray-700" style="font-family: Inter, sans-serif; font-weight: 500">
+                              {useCase.addedBy}
+                            </span>
+                          </div>
+                        </div>
+                      {/if}
+
+                      <div class="flex items-center gap-4 text-[12px] text-gray-600">
+                        <div class="flex items-center gap-1">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                          </svg>
+                          <span style="font-family: Inter, sans-serif; font-weight: 500">{useCase.upvotes || 0}</span>
+                        </div>
+                        {#if stackRankEntry && stackRankEntry.finalScore}
+                          <div class="flex items-center gap-1">
+                            <span style="font-family: Inter, sans-serif; font-weight: 400">Final Score:</span>
+                            <span class="text-[#6B9695]" style="font-family: Inter, sans-serif; font-weight: 600">
+                              {Math.round(stackRankEntry.finalScore)}
+                            </span>
+                          </div>
+                        {/if}
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      </div>
     </div>
   {/if}
 </div>

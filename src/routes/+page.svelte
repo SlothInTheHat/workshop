@@ -57,12 +57,6 @@
         </div>
         <div class="flex items-center gap-3">
           <a
-            href="/join"
-            class="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-[14px] font-medium"
-          >
-            Join Workshop
-          </a>
-          <a
             href="/workshops/new"
             class="flex items-center gap-2 px-4 py-2.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg transition-colors text-[14px] font-medium"
           >
