@@ -22,6 +22,23 @@
         <p class="text-[13px] text-gray-500">Enter your name and the access code provided by your facilitator.</p>
       </div>
 
+      <!-- Existing session banner -->
+      {#if data.existingSession?.workshopId}
+        <div class="mb-6 px-4 py-4 bg-[#F0F5F5] border border-[#6B9695]/30 rounded-lg">
+          <p class="text-[13px] text-gray-700 font-medium mb-1">Welcome back, {data.existingSession.name}</p>
+          <p class="text-[12px] text-gray-500 mb-3">You're already part of a workshop as a {data.existingSession.role}.</p>
+          <a
+            href={data.existingSession.role === 'contributor'
+              ? `/workshops/${data.existingSession.workshopId}/contributor`
+              : `/workshops/${data.existingSession.workshopId}/pre`}
+            class="inline-block px-4 py-2 bg-[#6B9695] hover:bg-[#5A8584] text-white rounded-lg text-[13px] font-medium transition-colors"
+          >
+            Continue to Workshop →
+          </a>
+          <p class="mt-3 text-[11px] text-gray-400">Or enter a new code below to join a different workshop.</p>
+        </div>
+      {/if}
+
       <!-- Error -->
       {#if form?.error}
         <div class="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-lg">

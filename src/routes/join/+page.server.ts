@@ -4,9 +4,38 @@ import { getSession, setSession, getAccessCodes, clearSession } from '$lib/sessi
 import { getDb, schema } from '$lib/db/index';
 import { or, eq } from 'drizzle-orm';
 
+function workshopRedirect(role: 'facilitator' | 'contributor', workshopId: string, status?: string) {
+	if (role === 'contributor') return `/workshops/${workshopId}/contributor`;
+	if (status === 'live') return `/workshop/${workshopId}/live`;
+	if (status === 'completed') return `/workshops/${workshopId}/post`;
+	return `/workshops/${workshopId}/pre`;
+}
+
 export const load: PageServerLoad = async ({ cookies, url }) => {
 	const returnTo = url.searchParams.get('return') ?? '/workshops';
 	const code = url.searchParams.get('code')?.trim().toUpperCase() ?? '';
+
+	// If user already has an active session for a workshop, bypass the code entry
+	const existingSession = getSession(cookies);
+	if (existingSession?.workshopId && !code) {
+		const db = getDb();
+		if (db) {
+			try {
+				const workshops = await db
+					.select()
+					.from(schema.preWorkshops)
+					.where(eq(schema.preWorkshops.id, existingSession.workshopId))
+					.limit(1);
+				if (workshops.length > 0) {
+					redirect(303, workshopRedirect(existingSession.role, existingSession.workshopId, workshops[0].status));
+				}
+			} catch {
+				// fall through to show join form
+			}
+		} else {
+			redirect(303, workshopRedirect(existingSession.role, existingSession.workshopId));
+		}
+	}
 
 	// If code is provided in URL, automatically try to join
 	if (code) {
@@ -82,7 +111,7 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
 		}
 	}
 
-	return { returnTo, prefillCode: code };
+	return { returnTo, prefillCode: code, existingSession: getSession(cookies) };
 };
 
 export const actions: Actions = {
