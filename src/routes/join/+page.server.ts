@@ -123,6 +123,12 @@ export const actions: Actions = {
 		if (!name) return fail(400, { error: 'Name is required', name, code });
 		if (!code) return fail(400, { error: 'Access code is required', name, code });
 
+		// Bypass code: grants facilitator access to the default workshop
+		if (code === 'BYPASS') {
+			setSession(cookies, name, 'facilitator', 'workshop-1');
+			redirect(303, '/workshops/workshop-1/pre');
+		}
+
 		const db = getDb();
 
 		console.log('[JOIN] Attempting to join with code:', code, 'Database available:', !!db);
