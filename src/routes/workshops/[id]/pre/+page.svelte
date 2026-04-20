@@ -39,6 +39,7 @@
   let pillarsError = $state('');
   let generatingSummary = $state(false);
   let summaryError = $state('');
+  let newPillar = $state('');
 
   let launching = $state(false);
 
@@ -229,6 +230,28 @@
     }
   }
 
+  async function addPillar() {
+    if (!newPillar.trim()) return;
+    const updated = [...(workshop.strategicPillars ?? []), newPillar.trim()];
+    newPillar = '';
+    await savePillars(updated);
+  }
+
+  async function removePillar(pillar: string) {
+    const updated = (workshop.strategicPillars ?? [])
+      .filter(p => p !== pillar);
+    await savePillars(updated);
+  }
+
+  async function savePillars(pillars: string[]) {
+    workshop = { ...workshop, strategicPillars: pillars };
+    await fetch(`/api/workshops/${workshop.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ strategicPillars: pillars })
+    });
+  }
+
   async function generateSummary() {
     if (stats.submittedCount === 0) {
       summaryError = 'Need at least one submitted contributor input';
@@ -392,29 +415,50 @@
               <div class="mb-6">
                 <div class="flex items-center justify-between mb-2">
                   <label class="block text-[13px] text-gray-700 font-medium">Strategic Pillars</label>
-                  {#if !workshop.strategicPillars || workshop.strategicPillars.length === 0}
-                    <button
-                      onclick={generatePillars}
-                      disabled={generatingPillars || stats.submittedCount === 0}
-                      class="px-3 py-1.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[11px] font-medium transition-colors disabled:opacity-50"
-                    >
-                      {generatingPillars ? 'Generating...' : '✨ Generate Pillars'}
-                    </button>
-                  {/if}
                 </div>
-                {#if pillarsError}
-                  <p class="text-[12px] text-red-600 mb-2">{pillarsError}</p>
-                {/if}
+
+                <div class="flex gap-2 mb-3">
+                  <input
+                    type="text"
+                    bind:value={newPillar}
+                    placeholder="Add a pillar..."
+                    onkeydown={(e) => e.key === 'Enter' && addPillar()}
+                    class="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-1 focus:ring-[#6B9695]"
+                  />
+                  <button
+                    onclick={addPillar}
+                    class="px-3 py-1.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[11px] font-medium transition-colors"
+                  >
+                    Add
+                  </button>
+                  <button
+                    onclick={generatePillars}
+                    disabled={generatingPillars || stats.submittedCount === 0}
+                    class="px-3 py-1.5 bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-lg text-[11px] font-medium transition-colors disabled:opacity-50"
+                  >
+                    {generatingPillars ? 'Generating...' : '✨ AI Generate'}
+                  </button>
+                </div>
+
                 {#if workshop.strategicPillars && workshop.strategicPillars.length > 0}
                   <div class="flex flex-wrap gap-2">
                     {#each workshop.strategicPillars as pillar}
-                      <span class="px-3 py-1.5 bg-[#E6F4F4] text-[#6B9695] rounded-full text-[12px] font-medium">
+                      <span class="flex items-center gap-1 px-3 py-1.5 bg-[#E6F4F4] text-[#6B9695] rounded-full text-[12px] font-medium">
                         {pillar}
+                        <button
+                          onclick={() => removePillar(pillar)}
+                          class="ml-1 text-[#6B9695] hover:text-red-400 transition-colors"
+                        >
+                          ×
+                        </button>
                       </span>
                     {/each}
                   </div>
                 {:else}
-                  <p class="text-[12px] text-gray-400 italic">Generate strategic pillars from contributor inputs</p>
+                  <p class="text-[12px] text-gray-400">
+                    No pillars yet. Add manually or use AI Generate
+                    (requires contributor submissions).
+                  </p>
                 {/if}
               </div>
 

@@ -20,6 +20,8 @@
   let aiInput = $state('');
   let aiStreaming = $state(false);
   let selectedCluster = $state<number | null>(null);
+  let contextExpanded = $state(false);
+  let painPointsExpanded = $state(false);
 
   // AI semantic clusters (workshop-wide view)
   interface AiCluster { theme: string; useCaseIds: string[] }
@@ -826,7 +828,7 @@
         </div>
 
         <!-- Breakout Teams -->
-        <div class="p-4">
+        <div class="p-4 border-b border-gray-100">
           <h3 class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold mb-3">Breakout Teams</h3>
           <div class="space-y-3">
             {#each teams as team}
@@ -850,6 +852,69 @@
             {/each}
           </div>
         </div>
+
+        <!-- Workshop Context -->
+        {#if workshop?.objective || workshop?.strategicPillars || workshop?.contributorInputs}
+          <div class="p-4">
+            <button onclick={() => contextExpanded = !contextExpanded}
+              class="w-full flex items-center justify-between mb-3">
+              <h3 class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Workshop Context</h3>
+              <svg class="w-3 h-3 text-gray-400 transition-transform {contextExpanded ? 'rotate-180' : ''}"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {#if contextExpanded}
+              <div class="space-y-3">
+                {#if workshop.objective}
+                  <div>
+                    <p class="text-[10px] text-gray-500 font-medium mb-1">Objective</p>
+                    <p class="text-[11px] text-gray-700 leading-relaxed">{workshop.objective}</p>
+                  </div>
+                {/if}
+
+                {#if workshop.strategicPillars && workshop.strategicPillars.length > 0}
+                  <div>
+                    <p class="text-[10px] text-gray-500 font-medium mb-1.5">Strategic Pillars</p>
+                    <div class="flex flex-wrap gap-1">
+                      {#each workshop.strategicPillars as pillar}
+                        <span class="px-2 py-0.5 bg-[#E6F4F4] text-[#6B9695] rounded text-[10px] font-medium">
+                          {pillar}
+                        </span>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
+
+                {#if workshop.contributorInputs && workshop.contributorInputs.length > 0}
+                  <div>
+                    <button onclick={() => painPointsExpanded = !painPointsExpanded}
+                      class="w-full flex items-center justify-between mb-1.5">
+                      <p class="text-[10px] text-gray-500 font-medium">Pain Points ({workshop.contributorInputs.length})</p>
+                      <svg class="w-3 h-3 text-gray-400 transition-transform {painPointsExpanded ? 'rotate-180' : ''}"
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {#if painPointsExpanded}
+                      <div class="space-y-2 max-h-40 overflow-y-auto">
+                        {#each workshop.contributorInputs as input}
+                          {#if input.painPoints}
+                            <div class="bg-gray-50 rounded p-2">
+                              <p class="text-[10px] text-gray-600 font-medium mb-0.5">{input.name}</p>
+                              <p class="text-[10px] text-gray-500 leading-relaxed">{input.painPoints}</p>
+                            </div>
+                          {/if}
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+            {/if}
+          </div>
+        {/if}
       </div>
     {/if}
 

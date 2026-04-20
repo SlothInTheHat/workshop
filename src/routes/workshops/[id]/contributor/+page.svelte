@@ -262,6 +262,44 @@
 
         <!-- Right sidebar -->
         <div class="space-y-4">
+          <!-- Workshop Context -->
+          {#if workshop.objective || workshop.focusArea}
+            <div class="bg-white rounded-lg border border-gray-200 p-5">
+              <h3 class="text-[13px] text-gray-900 font-semibold mb-3">Workshop Context</h3>
+              <div class="space-y-3">
+                {#if workshop.objective}
+                  <div>
+                    <p class="text-[11px] text-gray-500 font-medium mb-1">Objective</p>
+                    <p class="text-[13px] text-gray-700 leading-relaxed">{workshop.objective}</p>
+                  </div>
+                {/if}
+                {#if workshop.focusArea}
+                  <div>
+                    <p class="text-[11px] text-gray-500 font-medium mb-1">Focus Area</p>
+                    <p class="text-[13px] text-gray-700">{workshop.focusArea}</p>
+                  </div>
+                {/if}
+              </div>
+            </div>
+          {/if}
+
+          <!-- Kickoff Summary -->
+          {#if workshop.kickoffSummary}
+            <div class="bg-[#F9F9F8] rounded-lg border border-gray-200 p-5">
+              <div class="flex items-start gap-2 mb-3">
+                <span class="text-base">✨</span>
+                <h3 class="text-[13px] text-gray-900 font-semibold">AI Kickoff Summary</h3>
+              </div>
+              <div class="text-[13px] text-gray-700 leading-relaxed space-y-2">
+                {#each workshop.kickoffSummary.split('\n\n') as paragraph}
+                  {#if paragraph.trim()}
+                    <p>{paragraph}</p>
+                  {/if}
+                {/each}
+              </div>
+            </div>
+          {/if}
+
           <!-- Section status -->
           <div class="bg-white rounded-lg border border-gray-200 p-5">
             <h3 class="text-[13px] text-gray-900 font-semibold mb-4">Sections</h3>

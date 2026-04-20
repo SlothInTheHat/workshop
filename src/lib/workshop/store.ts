@@ -13,6 +13,7 @@ import type {
   RankedUseCase,
   WorkshopSummary,
 } from './types.js';
+import { saveToFile, loadFromFile } from './persist.js';
 
 // ── In-memory stores ──────────────────────────────────────────────────────────
 
@@ -25,6 +26,62 @@ export const comments = new Map<string, Comment[]>(); // useCaseId -> comments
 export const scores = new Map<string, Score>();
 export const promotions = new Map<string, Promotion>();
 export const summaries = new Map<string, WorkshopSummary>();
+
+// ── Persistence ───────────────────────────────────────────────────────────────
+
+function loadPersistedData() {
+  const data = loadFromFile();
+  if (!data) return;
+
+  if (data.workshops) {
+    for (const [k, v] of Object.entries(data.workshops)) {
+      workshops.set(k, v as any);
+    }
+  }
+  if (data.useCases) {
+    for (const [k, v] of Object.entries(data.useCases)) {
+      useCases.set(k, v as any);
+    }
+  }
+  if (data.teams) {
+    for (const [k, v] of Object.entries(data.teams)) {
+      teams.set(k, v as any);
+    }
+  }
+  if (data.participants) {
+    for (const [k, v] of Object.entries(data.participants)) {
+      participants.set(k, v as any);
+    }
+  }
+  if (data.insights) {
+    for (const [k, v] of Object.entries(data.insights)) {
+      insights.set(k, v as any);
+    }
+  }
+  if (data.scores) {
+    for (const [k, v] of Object.entries(data.scores)) {
+      scores.set(k, v as any);
+    }
+  }
+  if (data.summaries) {
+    for (const [k, v] of Object.entries(data.summaries)) {
+      summaries.set(k, v as any);
+    }
+  }
+  console.log('[Persist] Loaded data from file');
+}
+
+export function persistAll() {
+  saveToFile({
+    workshops: Object.fromEntries(workshops),
+    useCases: Object.fromEntries(useCases),
+    teams: Object.fromEntries(teams),
+    participants: Object.fromEntries(participants),
+    insights: Object.fromEntries(insights),
+    scores: Object.fromEntries(scores),
+    summaries: Object.fromEntries(summaries),
+  });
+}
 
 // SSE: workshopId -> Set of controller enqueue functions
 type Enqueuer = (event: WorkshopEvent) => void;
@@ -270,6 +327,7 @@ export function createUseCase(input: {
   insights.set(insightId, insight);
 
   broadcast(input.workshopId, 'usecase_added', useCase);
+  persistAll();
   return { useCase, insight };
 }
 
@@ -297,6 +355,7 @@ export function updateUseCase(
   }
 
   broadcast(uc.workshopId, 'usecase_updated', updated);
+  persistAll();
   return updated;
 }
 
@@ -311,6 +370,7 @@ export function upvoteUseCase(useCaseId: string, participantId: string): UseCase
   if (insight) insights.set(uc.insightId, { ...insight, upvotes: updated.upvotes });
 
   broadcast(uc.workshopId, 'usecase_upvoted', { id: useCaseId, upvotes: updated.upvotes });
+  persistAll();
   return updated;
 }
 
@@ -320,6 +380,7 @@ export function deleteUseCase(useCaseId: string): boolean {
   useCases.delete(useCaseId);
   insights.delete(uc.insightId);
   broadcast(uc.workshopId, 'usecase_deleted', { id: useCaseId });
+  persistAll();
   return true;
 }
 
@@ -371,6 +432,7 @@ export function addScore(input: {
   }
 
   broadcast(input.workshopId, 'usecase_scored', score);
+  persistAll();
   return score;
 }
 
@@ -401,6 +463,7 @@ export function promoteUseCase(
   promotions.set(promotion.id, promotion);
 
   broadcast(uc.workshopId, 'usecase_promoted', promotion);
+  persistAll();
   return promotion;
 }
 
@@ -453,11 +516,56 @@ export function saveSummary(workshopId: string, content: string): WorkshopSummar
   summaries.set(workshopId, summary);
 
   broadcast(workshopId, 'summary_generated', summary);
+  persistAll();
   return summary;
 }
 
 export function getSummary(workshopId: string): WorkshopSummary | null {
   return summaries.get(workshopId) ?? null;
+}
+
+export function setWorkshopContext(
+  workshopId: string,
+  context: {
+    title: string;
+    client: string;
+    objective: string;
+    aiContext: string;
+    contributorInputs: Array<{
+      name: string;
+      goals: string;
+      painPoints: string;
+      constraints: string;
+      successCriteria: string;
+    }>;
+    strategicPillars: string[];
+  }
+) {
+  const existing = workshops.get(workshopId);
+  if (existing) {
+    workshops.set(workshopId, {
+      ...existing,
+      objective: context.objective,
+      aiContext: context.aiContext,
+      contributorInputs: context.contributorInputs,
+      strategicPillars: context.strategicPillars,
+    });
+  } else {
+    workshops.set(workshopId, {
+      id: workshopId,
+      title: context.title,
+      client: context.client,
+      status: 'live',
+      createdAt: new Date().toISOString(),
+      agenda: [],
+      objective: context.objective,
+      aiContext: context.aiContext,
+      contributorInputs: context.contributorInputs,
+      strategicPillars: context.strategicPillars,
+    });
+  }
+  persistAll();
+  console.log('[Store] Workshop context set for:', workshopId);
 }
 
 // ── Seed data ─────────────────────────────────────────────────────────────────
@@ -503,4 +611,10 @@ function seed(): void {
   }
 }
 
-seed();
+// Load persisted data first
+loadPersistedData();
+
+// Only seed if no data was loaded
+if (workshops.size === 0) {
+  seed();
+}

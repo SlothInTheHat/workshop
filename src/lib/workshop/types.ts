@@ -18,6 +18,16 @@ export interface Workshop {
   createdAt: string;
   agenda: AgendaItem[];
   finishedVoting?: Set<string>;
+  objective?: string;
+  aiContext?: string;
+  strategicPillars?: string[];
+  contributorInputs?: Array<{
+    name: string;
+    goals: string;
+    painPoints: string;
+    constraints: string;
+    successCriteria: string;
+  }>;
 }
 
 export interface Participant {

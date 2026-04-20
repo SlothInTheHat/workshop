@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb, schema } from '$lib/db/index';
 import { eq } from 'drizzle-orm';
+import { setWorkshopContext } from '$lib/workshop/store';
 
 // GET /api/workshops/[id]
 export const GET: RequestHandler = async ({ params }) => {
@@ -83,6 +84,52 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 			details: 'Workshop moved to live phase',
 			createdAt: new Date()
 		});
+
+		// Copy pre-workshop data to live workshop
+		try {
+			// Get workshop details
+			const workshop = await db.select()
+				.from(schema.preWorkshops)
+				.where(eq(schema.preWorkshops.id, params.id))
+				.limit(1);
+
+			// Get all contributor inputs
+			const inputs = await db.select()
+				.from(schema.contributorInputs)
+				.where(eq(schema.contributorInputs.workshopId, params.id));
+
+			// Get participants
+			const participants = await db.select()
+				.from(schema.preParticipants)
+				.where(eq(schema.preParticipants.workshopId, params.id));
+
+			if (workshop[0]) {
+				const w = workshop[0];
+				setWorkshopContext(params.id, {
+					title: w.title,
+					client: w.tenantId,
+					objective: w.objective ?? '',
+					aiContext: w.aiContext ?? '',
+					strategicPillars: w.strategicPillars ?? [],
+					contributorInputs: inputs.map(input => {
+						const p = participants.find(
+							p => p.id === input.participantId
+						);
+						return {
+							name: p?.name ?? 'Anonymous',
+							goals: input.goalsAndObjectives ?? '',
+							painPoints: input.painPoints ?? '',
+							constraints: input.constraints ?? '',
+							successCriteria: input.successCriteria ?? '',
+						};
+					})
+				});
+				console.log('[Launch] Pre-workshop data copied to live workshop');
+			}
+		} catch (err) {
+			console.error('[Launch] Failed to copy pre-workshop data:', err);
+			// Don't block the launch if this fails
+		}
 	}
 
 	const updated = await db

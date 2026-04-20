@@ -25,3 +25,6 @@ vite.config.ts.timestamp-*
 # Claude Code
 .claude/settings.local.json
 POST_WORKSHOP*.md
+
+# Workshop data persistence
+workshop-data.json
