@@ -1,4 +1,4 @@
-CREATE TABLE "activity_logs" (
+CREATE TABLE IF NOT EXISTS "activity_logs" (
 	"id" text PRIMARY KEY NOT NULL,
 	"workshop_id" text NOT NULL,
 	"tenant_id" text NOT NULL,
@@ -8,7 +8,7 @@ CREATE TABLE "activity_logs" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "artifacts" (
+CREATE TABLE IF NOT EXISTS "artifacts" (
 	"id" text PRIMARY KEY NOT NULL,
 	"workshop_id" text NOT NULL,
 	"tenant_id" text NOT NULL,
@@ -20,7 +20,7 @@ CREATE TABLE "artifacts" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "contributor_inputs" (
+CREATE TABLE IF NOT EXISTS "contributor_inputs" (
 	"id" text PRIMARY KEY NOT NULL,
 	"workshop_id" text NOT NULL,
 	"participant_id" text NOT NULL,
@@ -35,7 +35,7 @@ CREATE TABLE "contributor_inputs" (
 	"submitted_at" timestamp
 );
 --> statement-breakpoint
-CREATE TABLE "pre_participants" (
+CREATE TABLE IF NOT EXISTS "pre_participants" (
 	"id" text PRIMARY KEY NOT NULL,
 	"workshop_id" text NOT NULL,
 	"tenant_id" text NOT NULL,
@@ -46,7 +46,7 @@ CREATE TABLE "pre_participants" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "pre_workshops" (
+CREATE TABLE IF NOT EXISTS "pre_workshops" (
 	"id" text PRIMARY KEY NOT NULL,
 	"tenant_id" text NOT NULL,
 	"title" text NOT NULL,
@@ -63,7 +63,7 @@ CREATE TABLE "pre_workshops" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "tenants" (
+CREATE TABLE IF NOT EXISTS "tenants" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"domain" text,
