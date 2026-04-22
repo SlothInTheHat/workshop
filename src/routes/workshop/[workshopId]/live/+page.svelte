@@ -802,7 +802,7 @@
           Add Use Case
         </button>
       {/if}
-      <button onclick={() => goto(`/workshop/${workshopId}/summary`)}
+      <button onclick={() => goto(`/workshops/${workshopId}/post`)}
         class="px-3 py-1.5 bg-gray-800 text-white hover:bg-gray-900 rounded-lg text-[12px] font-medium transition-colors">
         Complete Workshop
       </button>
