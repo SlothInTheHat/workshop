@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { getDb, schema } from '$lib/db/index';
 import { eq } from 'drizzle-orm';
 import { generateCode } from '$lib/codes';
-import { getSession } from '$lib/session';
+import { getSession, setSession } from '$lib/session';
 import { sendWorkshopInvite } from '$lib/email';
 
 // GET /api/workshops — list all workshops for a tenant
@@ -110,6 +110,11 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 		console.log('[API POST /api/workshops] SUCCESS! Workshop created:', id);
 		console.log('[API POST /api/workshops] Codes:', { facilitatorCode, contributorCode });
+
+		// Set facilitator session for the creator
+		const facilitatorName = session?.name ?? 'Facilitator';
+		setSession(cookies, facilitatorName, 'facilitator', id);
+		console.log('[API POST /api/workshops] Session created for:', facilitatorName);
 
 		// Send email invites to all participants
 		const baseUrl = request.headers.get('origin') ?? 'http://localhost:5173';
