@@ -44,6 +44,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
     const patch: Record<string, unknown> = {};
     if (typeof body.title === 'string') patch.title = body.title.trim();
     if (typeof body.summary === 'string') patch.summary = body.summary.trim();
+    if (typeof body.context === 'string') patch.context = body.context.trim();
     if (VALID_RATINGS.includes(body.value)) patch.value = body.value;
     if (VALID_RATINGS.includes(body.viability)) patch.viability = body.viability;
     if (VALID_VISIBILITY.includes(body.visibility)) patch.visibility = body.visibility;
@@ -90,6 +91,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
     const patch: Record<string, unknown> = {};
     if (typeof body.title === 'string') patch.title = body.title.trim();
     if (typeof body.summary === 'string') patch.summary = body.summary.trim();
+    if (typeof body.context === 'string') patch.context = body.context.trim();
     if (VALID_RATINGS.includes(body.value)) patch.value = body.value;
     if (VALID_RATINGS.includes(body.viability)) patch.viability = body.viability;
     if (VALID_VISIBILITY.includes(body.visibility)) patch.visibility = body.visibility;

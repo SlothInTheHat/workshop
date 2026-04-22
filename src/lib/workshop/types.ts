@@ -81,6 +81,8 @@ export interface UseCase {
   crossTeamOverlap?: string;
   insightId: string;
   whyItMatters?: string;
+  context?: string;
+  pillarTags?: string[];
 }
 
 export interface Insight {

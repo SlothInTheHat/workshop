@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { RESEND_API_KEY } from '$env/static/private';
 
 export async function sendWorkshopInvite({
 	toEmail,
@@ -15,7 +16,7 @@ export async function sendWorkshopInvite({
 	joinLink: string;
 	role: string;
 }) {
-	const apiKey = process.env.RESEND_API_KEY;
+	const apiKey = RESEND_API_KEY;
 	if (!apiKey) {
 		console.log('[EMAIL] RESEND_API_KEY not configured, skipping invite to', toEmail);
 		return;

@@ -265,6 +265,7 @@ export function createUseCase(input: {
   participantId: string;
   position?: { x: number; y: number };
   collaborators?: string[];
+  context?: string;
 }): { useCase: UseCase; insight: Insight } {
   const insightId = randomUUID();
   const useCaseId = randomUUID();
@@ -288,6 +289,7 @@ export function createUseCase(input: {
     commentCount: 0,
     collaborators: input.collaborators ?? [input.addedBy],
     insightId,
+    context: input.context ?? '',
   };
 
   // Detect cross-team overlap: any existing use case in the same workshop with similar title keywords
@@ -333,7 +335,7 @@ export function createUseCase(input: {
 
 export function updateUseCase(
   useCaseId: string,
-  patch: Partial<Pick<UseCase, 'title' | 'summary' | 'value' | 'viability' | 'visibility' | 'position' | 'clusterId' | 'collaborators'>>
+  patch: Partial<Pick<UseCase, 'title' | 'summary' | 'value' | 'viability' | 'visibility' | 'position' | 'clusterId' | 'collaborators' | 'context'>>
 ): UseCase | null {
   const uc = useCases.get(useCaseId);
   if (!uc) return null;
@@ -614,7 +616,5 @@ function seed(): void {
 // Load persisted data first
 loadPersistedData();
 
-// Only seed if no data was loaded
-if (workshops.size === 0) {
-  seed();
-}
+// Always seed the in-memory store with workshop-1 for fallback/testing
+seed();

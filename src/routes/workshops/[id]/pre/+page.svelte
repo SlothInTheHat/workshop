@@ -10,7 +10,7 @@
   let stats = $state(data.stats);
   const { session } = $derived(data);
 
-  let activeTab = $state<'overview' | 'participants' | 'artifacts' | 'context'>('overview');
+  let activeTab = $state<'overview' | 'participants' | 'artifacts' | 'context' | 'teams'>('overview');
 
   // Add participant
   let addingParticipant = $state(false);
@@ -42,6 +42,7 @@
   let newPillar = $state('');
 
   let launching = $state(false);
+  let newTeamName = $state('');
 
   const overallProgress = $derived(
     stats.contributorCount > 0
@@ -289,6 +290,32 @@
     URL.revokeObjectURL(url);
   }
 
+  async function addTeam() {
+    if (!newTeamName.trim()) return;
+    const updated = [
+      ...(workshop.teams ?? []),
+      { name: newTeamName.trim() }
+    ];
+    newTeamName = '';
+    workshop = { ...workshop, teams: updated };
+    await fetch(`/api/workshops/${workshop.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teams: updated })
+    });
+  }
+
+  async function removeTeam(name: string) {
+    const updated = (workshop.teams ?? [])
+      .filter(t => t.name !== name);
+    workshop = { ...workshop, teams: updated };
+    await fetch(`/api/workshops/${workshop.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teams: updated })
+    });
+  }
+
   async function launchWorkshop() {
     if (!confirm('Move this workshop to the live phase? Contributors will no longer be able to edit their inputs.')) return;
     launching = true;
@@ -390,6 +417,7 @@
               { id: 'participants', label: `Participants (${participants.length})` },
               { id: 'artifacts', label: `Artifacts (${artifacts.length})` },
               { id: 'context', label: 'AI Context' },
+              { id: 'teams', label: 'Teams' },
             ] as tab}
               <button
                 onclick={() => activeTab = tab.id as typeof activeTab}
@@ -716,6 +744,60 @@
                   </p>
                 </div>
               {/if}
+            {/if}
+
+            <!-- TEAMS -->
+            {#if activeTab === 'teams'}
+              <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h3 class="text-[15px] font-semibold text-gray-900">
+                      Breakout Teams
+                    </h3>
+                    <p class="text-[12px] text-gray-500 mt-0.5">
+                      Configure teams before launching the workshop
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Add team form -->
+                <div class="flex gap-2">
+                  <input
+                    type="text"
+                    bind:value={newTeamName}
+                    placeholder="Team name (e.g. Team Alpha)"
+                    onkeydown={(e) => e.key === 'Enter' && addTeam()}
+                    class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-1 focus:ring-[#6B9695]"
+                  />
+                  <button
+                    onclick={addTeam}
+                    class="px-4 py-2 bg-[#6B9695] text-white rounded-lg text-[13px] font-medium hover:bg-[#5A8584] transition-colors"
+                  >
+                    Add Team
+                  </button>
+                </div>
+
+                <!-- Teams list -->
+                {#if workshop.teams && workshop.teams.length > 0}
+                  <div class="space-y-2">
+                    {#each workshop.teams as team}
+                      <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <span class="text-[13px] font-medium text-gray-900">
+                          {team.name}
+                        </span>
+                        <button
+                          onclick={() => removeTeam(team.name)}
+                          class="text-gray-400 hover:text-red-500 transition-colors text-[16px]"
+                        >×</button>
+                      </div>
+                    {/each}
+                  </div>
+                {:else}
+                  <p class="text-[12px] text-gray-400 py-4 text-center">
+                    No teams yet. Add at least 2 teams before launching.
+                  </p>
+                {/if}
+              </div>
             {/if}
           </div>
         </div>

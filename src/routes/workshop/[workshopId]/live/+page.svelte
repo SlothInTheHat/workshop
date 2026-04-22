@@ -204,6 +204,7 @@
   let selectedCardId = $state<string | null>(null);
   let editTitle = $state('');
   let editSummary = $state('');
+  let editContext = $state('');
   let editValue = $state<'High' | 'Medium' | 'Low'>('High');
   let editViability = $state<'High' | 'Medium' | 'Low'>('Medium');
   let editVisibility = $state<'Internal' | 'Restricted' | 'Cross-Silo'>('Internal');
@@ -335,6 +336,7 @@
     selectedCardId = card.id;
     editTitle = card.title;
     editSummary = card.summary;
+    editContext = card.context ?? '';
     editValue = card.value;
     editViability = card.viability;
     editVisibility = card.visibility;
@@ -360,6 +362,7 @@
         body: JSON.stringify({
           title: editTitle.trim(),
           summary: editSummary.trim(),
+          context: editContext.trim(),
           value: editValue,
           viability: editViability,
           visibility: editVisibility,
@@ -408,24 +411,40 @@
   }
 
   async function joinTeam(teamId: string) {
+    console.log('[JOIN TEAM] Attempting to join team:', teamId);
     joiningTeam = true;
     try {
-      const res = await fetch(`/api/workshop/${workshopId}/join`, {
+      const res = await fetch(`/api/workshop/${workshopId}/participants`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teamId }),
+        body: JSON.stringify({
+          teamId,
+          name: currentUser.name,
+          initials: currentUser.initials,
+          color: currentUser.color,
+          role: currentUser.role
+        }),
       });
-      if (res.ok) {
-        const participant = await res.json();
-        me = participant;
-        // Refresh participants list
-        const r = await fetch(`/api/workshop/${workshopId}`);
-        if (r.ok) {
-          const overview = await r.json();
-          participants = overview.participants ?? participants;
-          teams = overview.teams ?? teams;
-        }
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('[JOIN TEAM] Failed:', res.status, errorText);
+        return;
       }
+
+      const participant = await res.json();
+      console.log('[JOIN TEAM] Success:', participant);
+      me = participant;
+
+      // Refresh participants list
+      const r = await fetch(`/api/workshop/${workshopId}`);
+      if (r.ok) {
+        const overview = await r.json();
+        participants = overview.participants ?? participants;
+        teams = overview.teams ?? teams;
+      }
+    } catch (err) {
+      console.error('[JOIN TEAM] Error:', err);
     } finally {
       joiningTeam = false;
     }
@@ -441,6 +460,7 @@
   // New use case form
   let newTitle = $state('');
   let newSummary = $state('');
+  let newContext = $state('');
   let newValue = $state<'High' | 'Medium' | 'Low'>('High');
   let newViability = $state<'High' | 'Medium' | 'Low'>('Medium');
   let newVisibility = $state<'Internal' | 'Restricted' | 'Cross-Silo'>('Internal');
@@ -596,6 +616,7 @@
         body: JSON.stringify({
           title: newTitle.trim(),
           summary: newSummary.trim() || newTitle.trim(),
+          context: newContext.trim(),
           value: newValue,
           viability: newViability,
           visibility: newVisibility,
@@ -612,6 +633,7 @@
         if (!cards.find(c => c.id === useCase.id)) cards = [...cards, useCase];
         newTitle = '';
         newSummary = '';
+        newContext = '';
         newValue = 'High';
         newViability = 'Medium';
         newVisibility = 'Internal';
@@ -1049,6 +1071,17 @@
               <h4 class="text-[13px] text-gray-900 font-semibold mb-1">{card.title}</h4>
               <p class="text-[12px] text-gray-600 mb-2.5">{card.summary}</p>
 
+              <!-- Strategic Pillar Tags -->
+              {#if card.pillarTags && card.pillarTags.length > 0}
+                <div class="mb-2 flex flex-wrap gap-1">
+                  {#each card.pillarTags as pillar}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] bg-[#d0af51]/10 text-[#d0af51] border border-[#d0af51]/30 font-medium">
+                      ✦ {pillar}
+                    </span>
+                  {/each}
+                </div>
+              {/if}
+
               <!-- Collaborators -->
               {#if card.collaborators?.length}
                 <div class="mb-2 flex flex-wrap gap-1">
@@ -1271,6 +1304,11 @@
             <label for="uc-summary" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Summary</label>
             <textarea id="uc-summary" bind:value={newSummary} rows="4" placeholder="What problem does AI solve here?"
               class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none bg-[#FAFAF9] transition-colors {newSummary ? 'border-[#6B9695]/40' : ''}"></textarea>
+          </div>
+          <div>
+            <label for="uc-context" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Context / Notes</label>
+            <textarea id="uc-context" bind:value={newContext} rows="2" placeholder="Additional context or implementation notes..."
+              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none bg-[#FAFAF9] transition-colors {newContext ? 'border-[#6B9695]/40' : ''}"></textarea>
           </div>
           <div class="grid grid-cols-3 gap-2.5">
             <div>
@@ -1516,6 +1554,12 @@
           <textarea id="edit-summary" bind:value={editSummary} rows="3"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none"
             placeholder="One sentence describing the AI use case"></textarea>
+        </div>
+        <div>
+          <label for="edit-context" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Context / Notes</label>
+          <textarea id="edit-context" bind:value={editContext} rows="2"
+            placeholder="Additional context or implementation notes..."
+            class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none bg-[#FAFAF9] transition-colors"></textarea>
         </div>
         <div class="grid grid-cols-3 gap-3">
           <div>

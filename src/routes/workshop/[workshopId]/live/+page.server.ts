@@ -2,6 +2,9 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getSession } from '$lib/session';
 import { participants } from '$lib/workshop/store.js';
+import { getDb } from '$lib/db/index.js';
+import * as schema from '$lib/db/schema.js';
+import { eq } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ fetch, params, cookies }) => {
   const session = getSession(cookies);
@@ -17,11 +20,37 @@ export const load: PageServerLoad = async ({ fetch, params, cookies }) => {
   const overview = overviewRes.ok ? await overviewRes.json() : { workshop: null, teams: [], participants: [] };
   const usecases = usecasesRes.ok ? await usecasesRes.json() : [];
 
-  // Find participant matching the session name
-  const me = Array.from(participants.values()).find(p =>
-    p.workshopId === workshopId && p.name === session.name
+  const db = getDb();
+  let me = null;
+
+  // Check in-memory store first (for seed data)
+  me = Array.from(participants.values()).find(p =>
+    p.workshopId === workshopId && p.name === session?.name
   ) ?? null;
-  const needsTeamSelection = !me || !me.teamId;
+
+  // If not found, check database
+  if (!me && db && session?.name) {
+    try {
+      const dbParts = await db.select()
+        .from(schema.preParticipants)
+        .where(eq(schema.preParticipants.workshopId, workshopId));
+      const found = dbParts.find(p => p.name === session.name);
+      if (found) {
+        me = {
+          id: found.id,
+          name: found.name,
+          workshopId,
+          teamId: null,
+          presence: 'online',
+          role: found.role
+        };
+      }
+    } catch (err) {
+      console.warn('[Live] DB participant lookup failed:', err);
+    }
+  }
+
+  const needsTeamSelection = !me?.teamId;
 
   // Generate initials and color from name
   const initials = session.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);

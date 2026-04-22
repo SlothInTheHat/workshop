@@ -42,7 +42,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
   const body = await request.json().catch(() => null);
   if (!body) throw error(400, 'Invalid JSON body');
 
-  const { title, summary, value, viability, visibility, teamId, participantId, position, collaborators } = body;
+  const { title, summary, value, viability, visibility, teamId, participantId, position, collaborators, context } = body;
 
   if (!title || typeof title !== 'string') throw error(400, 'title is required');
   if (!summary || typeof summary !== 'string') throw error(400, 'summary is required');
@@ -82,6 +82,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
         participantId,
         title: title.trim(),
         summary: summary.trim(),
+        context: context ?? '',
         value,
         viability,
         visibility,
@@ -113,6 +114,27 @@ export const POST: RequestHandler = async ({ params, request }) => {
       })
       .returning();
 
+    // Auto-tag with strategic pillars
+    const workshopForPillars = workshops.get(params.workshopId);
+    const pillars = workshopForPillars?.strategicPillars ?? [];
+
+    if (pillars.length > 0) {
+      const text = (title + ' ' + summary).toLowerCase();
+      const matchingPillars = pillars.filter(pillar => {
+        const pillarWords = pillar.toLowerCase().split(' ');
+        return pillarWords.some(word =>
+          word.length > 3 && text.includes(word)
+        );
+      });
+
+      if (matchingPillars.length > 0 && db) {
+        await db.update(schema.useCases)
+          .set({ pillarTags: matchingPillars })
+          .where(eq(schema.useCases.id, useCaseId));
+        console.log('[Pillar Match DB]', title, '→', matchingPillars);
+      }
+    }
+
     return json({ useCase, insight }, { status: 201 });
   } else {
     if (!workshops.has(params.workshopId)) throw error(404, 'Workshop not found');
@@ -137,7 +159,28 @@ export const POST: RequestHandler = async ({ params, request }) => {
       participantId,
       position: position && typeof position.x === 'number' ? position : undefined,
       collaborators: Array.isArray(collaborators) ? collaborators : undefined,
+      context: context ?? '',
     });
+
+    // Auto-tag with strategic pillars
+    const workshop = workshops.get(params.workshopId);
+    const pillars = workshop?.strategicPillars ?? [];
+
+    if (pillars.length > 0) {
+      const text = (title + ' ' + summary).toLowerCase();
+      const matchingPillars = pillars.filter(pillar => {
+        const pillarWords = pillar.toLowerCase().split(' ');
+        return pillarWords.some(word =>
+          word.length > 3 && text.includes(word)
+        );
+      });
+
+      if (matchingPillars.length > 0) {
+        const uc = result.useCase;
+        uc.pillarTags = matchingPillars;
+        console.log('[Pillar Match]', title, '→', matchingPillars);
+      }
+    }
 
     return json(result, { status: 201 });
   }

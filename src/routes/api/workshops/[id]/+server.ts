@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb, schema } from '$lib/db/index';
 import { eq } from 'drizzle-orm';
-import { setWorkshopContext } from '$lib/workshop/store';
+import { setWorkshopContext, createTeam } from '$lib/workshop/store';
 
 // GET /api/workshops/[id]
 export const GET: RequestHandler = async ({ params }) => {
@@ -54,6 +54,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		dataSensitivity?: string;
 		aiContext?: string;
 		kickoffSummary?: string;
+		teams?: {name: string}[];
 		actorName?: string;
 	};
 
@@ -71,6 +72,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 	if (body.dataSensitivity !== undefined) updates.dataSensitivity = body.dataSensitivity;
 	if (body.aiContext !== undefined) updates.aiContext = body.aiContext;
 	if (body.kickoffSummary !== undefined) updates.kickoffSummary = body.kickoffSummary;
+	if (body.teams !== undefined) updates.teams = body.teams;
 
 	await db.update(schema.preWorkshops).set(updates).where(eq(schema.preWorkshops.id, params.id));
 
@@ -125,6 +127,20 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 					})
 				});
 				console.log('[Launch] Pre-workshop data copied to live workshop');
+
+				// Create teams in live workshop from pre-workshop config
+				const preTeams = w.teams ?? [];
+				if (preTeams.length > 0) {
+					for (const team of preTeams) {
+						createTeam(params.id, team.name, []);
+						console.log('[Launch] Created team:', team.name);
+					}
+				} else {
+					// Default teams if none configured
+					createTeam(params.id, 'Team A', []);
+					createTeam(params.id, 'Team B', []);
+					console.log('[Launch] Created default teams');
+				}
 			}
 		} catch (err) {
 			console.error('[Launch] Failed to copy pre-workshop data:', err);
