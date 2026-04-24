@@ -15,6 +15,27 @@
       "when": 1776200000000,
       "tag": "0004_odd_jimmy_woo",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776300000000,
+      "tag": "0005_usecase_expanded_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1776400000000,
+      "tag": "0006_pre_workshops_pillars",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1776500000000,
+      "tag": "0007_missing_columns",
+      "breakpoints": true
     }
   ]
 }

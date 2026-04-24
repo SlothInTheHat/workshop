@@ -51,6 +51,13 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
     if (body.position && typeof body.position.x === 'number') patch.position = body.position;
     if (typeof body.clusterId === 'number') patch.clusterId = body.clusterId;
     if (Array.isArray(body.collaborators)) patch.collaborators = body.collaborators;
+    if (Array.isArray(body.pillarTags)) patch.pillarTags = body.pillarTags;
+    if (typeof body.problemStatement === 'string') patch.problemStatement = body.problemStatement.trim();
+    if (typeof body.solutionOverview === 'string') patch.solutionOverview = body.solutionOverview.trim();
+    if (Array.isArray(body.businessUnits)) patch.businessUnits = body.businessUnits;
+    if (typeof body.timeline === 'string') patch.timeline = body.timeline.trim();
+    if (typeof body.costs === 'string') patch.costs = body.costs.trim();
+    if (typeof body.legalCompliance === 'string') patch.legalCompliance = body.legalCompliance.trim();
 
     if (Object.keys(patch).length === 0) throw error(400, 'No valid fields to update');
 
@@ -98,6 +105,13 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
     if (body.position && typeof body.position.x === 'number') patch.position = body.position;
     if (typeof body.clusterId === 'number') patch.clusterId = body.clusterId;
     if (Array.isArray(body.collaborators)) patch.collaborators = body.collaborators;
+    if (Array.isArray(body.pillarTags)) patch.pillarTags = body.pillarTags;
+    if (typeof body.problemStatement === 'string') patch.problemStatement = body.problemStatement.trim();
+    if (typeof body.solutionOverview === 'string') patch.solutionOverview = body.solutionOverview.trim();
+    if (Array.isArray(body.businessUnits)) patch.businessUnits = body.businessUnits;
+    if (typeof body.timeline === 'string') patch.timeline = body.timeline.trim();
+    if (typeof body.costs === 'string') patch.costs = body.costs.trim();
+    if (typeof body.legalCompliance === 'string') patch.legalCompliance = body.legalCompliance.trim();
 
     if (Object.keys(patch).length === 0) throw error(400, 'No valid fields to update');
 

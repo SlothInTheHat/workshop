@@ -266,6 +266,13 @@ export function createUseCase(input: {
   position?: { x: number; y: number };
   collaborators?: string[];
   context?: string;
+  pillarTags?: string[];
+  problemStatement?: string;
+  solutionOverview?: string;
+  businessUnits?: string[];
+  timeline?: string;
+  costs?: string;
+  legalCompliance?: string;
 }): { useCase: UseCase; insight: Insight } {
   const insightId = randomUUID();
   const useCaseId = randomUUID();
@@ -290,6 +297,13 @@ export function createUseCase(input: {
     collaborators: input.collaborators ?? [input.addedBy],
     insightId,
     context: input.context ?? '',
+    pillarTags: input.pillarTags ?? [],
+    problemStatement: input.problemStatement,
+    solutionOverview: input.solutionOverview,
+    businessUnits: input.businessUnits ?? [],
+    timeline: input.timeline,
+    costs: input.costs,
+    legalCompliance: input.legalCompliance,
   };
 
   // Detect cross-team overlap: any existing use case in the same workshop with similar title keywords
@@ -335,7 +349,7 @@ export function createUseCase(input: {
 
 export function updateUseCase(
   useCaseId: string,
-  patch: Partial<Pick<UseCase, 'title' | 'summary' | 'value' | 'viability' | 'visibility' | 'position' | 'clusterId' | 'collaborators' | 'context'>>
+  patch: Partial<Pick<UseCase, 'title' | 'summary' | 'value' | 'viability' | 'visibility' | 'position' | 'clusterId' | 'collaborators' | 'context' | 'pillarTags' | 'problemStatement' | 'solutionOverview' | 'businessUnits' | 'timeline' | 'costs' | 'legalCompliance'>>
 ): UseCase | null {
   const uc = useCases.get(useCaseId);
   if (!uc) return null;
@@ -587,6 +601,9 @@ function seed(): void {
       { id: 'a3', title: 'AI Opportunities', description: 'Explore automation potential', isActive: false },
       { id: 'a4', title: 'Viability', description: 'Assess implementation readiness', isActive: false },
     ],
+    objective: 'Identify and prioritise the highest-value AI use cases that can reduce administrative burden, improve care coordination, and accelerate patient throughput across Metro Health System\'s clinical operations.',
+    strategicPillars: ['Patient Experience', 'Operational Efficiency', 'Data Quality', 'Staff Enablement'],
+    aiContext: 'Metro Health System operates across 12 facilities with fragmented EHR systems. Key pain points include manual intake processes, slow insurance verification, and poor inter-facility data sync.',
   };
   workshops.set(workshopId, workshop);
 

@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { useCases, participants, getComments, createComment } from '$lib/workshop/store.js';
+import { getSession } from '$lib/session.js';
 
 export const GET: RequestHandler = async ({ params }) => {
   const { usecaseId } = params;
@@ -8,24 +9,26 @@ export const GET: RequestHandler = async ({ params }) => {
   return json(getComments(usecaseId));
 };
 
-export const POST: RequestHandler = async ({ params, request, locals }) => {
+export const POST: RequestHandler = async ({ params, request, cookies }) => {
   const { workshopId, usecaseId } = params;
   if (!useCases.has(usecaseId)) throw error(404, 'Use case not found');
-  if (!locals.user) throw error(401, 'Not authenticated');
+
+  const session = getSession(cookies);
+  if (!session) throw error(401, 'Not authenticated');
 
   const body = await request.json().catch(() => null);
   const content = (body?.content as string)?.trim();
   if (!content) throw error(400, 'content is required');
 
-  // Get participant info for author details
-  const participant = participants.get(locals.user.id);
-  const authorName = participant?.name ?? locals.user.name;
-  const authorInitials = participant?.initials ?? locals.user.initials;
-  const authorColor = participant?.color ?? locals.user.color;
+  const participantId = `${workshopId}-${session.name.toLowerCase().replace(/\s+/g, '-')}`;
+  const participant = participants.get(participantId);
+  const authorName = participant?.name ?? session.name;
+  const authorInitials = participant?.initials ?? session.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+  const authorColor = participant?.color ?? 'bg-gray-400';
 
   const comment = createComment({
     useCaseId: usecaseId,
-    participantId: locals.user.id,
+    participantId,
     authorName,
     authorInitials,
     authorColor,

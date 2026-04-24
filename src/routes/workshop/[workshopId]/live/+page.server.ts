@@ -36,13 +36,17 @@ export const load: PageServerLoad = async ({ fetch, params, cookies }) => {
         .where(eq(schema.preParticipants.workshopId, workshopId));
       const found = dbParts.find(p => p.name === session.name);
       if (found) {
+        const foundInitials = found.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+        const foundColors = ['bg-blue-400', 'bg-green-400', 'bg-purple-400', 'bg-pink-400', 'bg-yellow-400', 'bg-red-400'];
         me = {
           id: found.id,
           name: found.name,
           workshopId,
-          teamId: null,
-          presence: 'online',
-          role: found.role
+          teamId: undefined,
+          presence: 'remote' as const,
+          role: found.role,
+          initials: foundInitials,
+          color: foundColors[found.name.length % foundColors.length],
         };
       }
     } catch (err) {

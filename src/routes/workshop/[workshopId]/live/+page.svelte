@@ -45,6 +45,7 @@
     summary: string;
     value: 'High' | 'Medium' | 'Low';
     viability: 'High' | 'Medium' | 'Low';
+    pillarTags?: string[];
   }
 
   // ── AI sessions (one per card + one for creation) ────────────────────────────
@@ -55,8 +56,22 @@
   let aiPreview = $state<UsecasePreview | null>(null);
   let aiCreationMode = $state(false);
 
+  function chatStorageKey(sessionId: string) {
+    return `workshop-${workshopId}-chat-${sessionId}`;
+  }
+
   function saveSession() {
-    sessionStore[activeSessionId] = { messages: [...aiMessages], preview: aiPreview };
+    const session = { messages: [...aiMessages], preview: aiPreview };
+    sessionStore[activeSessionId] = session;
+    try { localStorage.setItem(chatStorageKey(activeSessionId), JSON.stringify(session)); } catch {}
+  }
+
+  function hydrateSession(sessionId: string) {
+    if (sessionStore[sessionId]) return;
+    try {
+      const stored = localStorage.getItem(chatStorageKey(sessionId));
+      if (stored) sessionStore[sessionId] = JSON.parse(stored);
+    } catch {}
   }
 
   // Auto-populate form when AI generates a preview during creation
@@ -66,11 +81,13 @@
       newSummary = aiPreview.summary;
       newValue = aiPreview.value;
       newViability = aiPreview.viability;
+      if (aiPreview.pillarTags?.length) newPillarTags = aiPreview.pillarTags;
     }
   });
   function loadSession(id: string, primeMessage?: string) {
     saveSession();
     activeSessionId = id;
+    hydrateSession(id);
     const saved = sessionStore[id];
     aiMessages = saved ? [...saved.messages] : (primeMessage ? [{ role: 'assistant' as const, content: primeMessage }] : []);
     aiPreview = saved?.preview ?? null;
@@ -208,6 +225,12 @@
   let editValue = $state<'High' | 'Medium' | 'Low'>('High');
   let editViability = $state<'High' | 'Medium' | 'Low'>('Medium');
   let editVisibility = $state<'Internal' | 'Restricted' | 'Cross-Silo'>('Internal');
+  let editProblemStatement = $state('');
+  let editSolutionOverview = $state('');
+  let editBusinessUnits = $state('');
+  let editTimeline = $state('');
+  let editCosts = $state('');
+  let editLegalCompliance = $state('');
   let savingEdit = $state(false);
 
   // Drag vs click detection
@@ -302,6 +325,7 @@
       ];
     } finally {
       aiStreaming = false;
+      saveSession();
     }
   }
 
@@ -329,7 +353,14 @@
     newValue = 'High';
     newViability = 'Medium';
     newVisibility = 'Internal';
-    loadSession('new', "Let's capture a new use case. What problem or opportunity are you thinking about?");
+    // Always start fresh — don't restore previous chat
+    sessionStore['new'] = { messages: [], preview: null };
+    try { localStorage.removeItem(chatStorageKey('new')); } catch {}
+    aiMessages = [];
+    aiPreview = null;
+    activeSessionId = 'new';
+    const welcome = "Let's capture a new use case. What problem or opportunity are you thinking about?";
+    aiMessages = [{ role: 'assistant', content: welcome }];
   }
 
   function selectCard(card: UseCase) {
@@ -340,14 +371,32 @@
     editValue = card.value;
     editViability = card.viability;
     editVisibility = card.visibility;
+    editProblemStatement = (card as any).problemStatement ?? '';
+    editSolutionOverview = (card as any).solutionOverview ?? '';
+    editBusinessUnits = ((card as any).businessUnits ?? []).join(', ');
+    editTimeline = (card as any).timeline ?? '';
+    editCosts = (card as any).costs ?? '';
+    editLegalCompliance = (card as any).legalCompliance ?? '';
     aiCreationMode = false;
     isAiCollapsed = false;
     const prime = `I'm looking at **${card.title}** — ${card.summary}. What would you like to change or improve?`;
     loadSession(card.id, prime);
+    // Auto-load comments
+    commentCardId = card.id;
+    commentList = [];
+    commentLoading = true;
+    fetch(`/api/workshop/${workshopId}/usecases/${card.id}/comments`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { commentList = data; })
+      .catch(() => {})
+      .finally(() => { commentLoading = false; });
   }
 
   function deselectCard() {
     selectedCardId = null;
+    commentCardId = null;
+    commentList = [];
+    showEditAdditionalDetails = false;
     saveSession();
     loadSession('new');
   }
@@ -366,6 +415,12 @@
           value: editValue,
           viability: editViability,
           visibility: editVisibility,
+          problemStatement: editProblemStatement.trim() || undefined,
+          solutionOverview: editSolutionOverview.trim() || undefined,
+          businessUnits: editBusinessUnits.trim() ? editBusinessUnits.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+          timeline: editTimeline.trim() || undefined,
+          costs: editCosts.trim() || undefined,
+          legalCompliance: editLegalCompliance.trim() || undefined,
         }),
       });
       if (res.ok) {
@@ -464,6 +519,15 @@
   let newValue = $state<'High' | 'Medium' | 'Low'>('High');
   let newViability = $state<'High' | 'Medium' | 'Low'>('Medium');
   let newVisibility = $state<'Internal' | 'Restricted' | 'Cross-Silo'>('Internal');
+  let newProblemStatement = $state('');
+  let newSolutionOverview = $state('');
+  let newBusinessUnits = $state('');
+  let newTimeline = $state('');
+  let newCosts = $state('');
+  let newLegalCompliance = $state('');
+  let newPillarTags = $state<string[]>([]);
+  let showAdditionalDetails = $state(false);
+  let showEditAdditionalDetails = $state(false);
   let addingUseCase = $state(false);
 
   // Drag state
@@ -604,7 +668,7 @@
     addingUseCase = true;
 
     const myTeam = teamForParticipant(me.id);
-    if (!myTeam) { addingUseCase = false; return; }
+    if (!myTeam) { addingUseCase = false; alert('Please select a team before creating a use case.'); return; }
 
     // Position near existing cards to avoid overlap
     const pos = { x: 80 + (cards.length % 4) * 220, y: 60 + Math.floor(cards.length / 4) * 240 };
@@ -624,6 +688,13 @@
           participantId: me.id,
           position: pos,
           collaborators: [me.name],
+          problemStatement: newProblemStatement.trim() || undefined,
+          solutionOverview: newSolutionOverview.trim() || undefined,
+          businessUnits: newBusinessUnits.trim() ? newBusinessUnits.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+          timeline: newTimeline.trim() || undefined,
+          costs: newCosts.trim() || undefined,
+          legalCompliance: newLegalCompliance.trim() || undefined,
+          pillarTags: newPillarTags.length ? newPillarTags : undefined,
         }),
       });
 
@@ -637,6 +708,14 @@
         newValue = 'High';
         newViability = 'Medium';
         newVisibility = 'Internal';
+        newProblemStatement = '';
+        newSolutionOverview = '';
+        newBusinessUnits = '';
+        newTimeline = '';
+        newCosts = '';
+        newLegalCompliance = '';
+        newPillarTags = [];
+        showAdditionalDetails = false;
         aiCreationMode = false;
         aiPreview = null;
         saveSession();
@@ -1122,7 +1201,7 @@
                   </button>
                   <button
                     onmousedown={(e) => e.stopPropagation()}
-                    onclick={() => openComments(card.id)}
+                    onclick={() => selectCard(card)}
                     class="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-gray-100 text-gray-500 text-[10px] transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                     {card.commentCount ?? 0}
@@ -1330,6 +1409,54 @@
               </select>
             </div>
           </div>
+
+          <!-- Additional Details (collapsible) -->
+          <button type="button" onclick={() => showAdditionalDetails = !showAdditionalDetails}
+            class="flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-gray-700 font-semibold uppercase tracking-wide transition-colors">
+            <svg class="w-3 h-3 transition-transform {showAdditionalDetails ? 'rotate-90' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+            Additional Details
+          </button>
+          {#if showAdditionalDetails}
+            <div class="space-y-3 pt-1">
+              <div>
+                <label for="uc-problem" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Problem Statement</label>
+                <textarea id="uc-problem" bind:value={newProblemStatement} rows="2" placeholder="What specific problem are we solving?"
+                  class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none bg-[#FAFAF9] transition-colors"></textarea>
+              </div>
+              <div>
+                <label for="uc-solution" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Solution Overview</label>
+                <textarea id="uc-solution" bind:value={newSolutionOverview} rows="2" placeholder="How does AI solve this problem?"
+                  class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none bg-[#FAFAF9] transition-colors"></textarea>
+              </div>
+              <div class="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label for="uc-units" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Business Units</label>
+                  <input id="uc-units" type="text" bind:value={newBusinessUnits} placeholder="e.g. Finance, Ops (comma-sep)"
+                    class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9] transition-colors" />
+                </div>
+                <div>
+                  <label for="uc-timeline" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Timeline</label>
+                  <input id="uc-timeline" type="text" bind:value={newTimeline} placeholder="e.g. Q3 2025, 6 months"
+                    class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9] transition-colors" />
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label for="uc-costs" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Estimated Costs</label>
+                  <input id="uc-costs" type="text" bind:value={newCosts} placeholder="e.g. $50k–$150k"
+                    class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9] transition-colors" />
+                </div>
+                <div>
+                  <label for="uc-legal" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Legal & Compliance</label>
+                  <input id="uc-legal" type="text" bind:value={newLegalCompliance} placeholder="e.g. HIPAA, SOC 2"
+                    class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9] transition-colors" />
+                </div>
+              </div>
+            </div>
+          {/if}
+
           {#if me}
             <p class="text-[11px] text-gray-400">Adding as <span class="font-medium text-gray-600">{me.name}</span> · {teamForParticipant(me.id)?.name ?? 'no team'}</p>
           {/if}
@@ -1425,7 +1552,7 @@
 {/if}
 
 <!-- Team Selection Modal -->
-{#if data.needsTeamSelection && !me}
+{#if !me?.teamId && teams.length > 0}
   <div class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6">
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
       <div class="mb-5">
@@ -1450,87 +1577,14 @@
   </div>
 {/if}
 
-<!-- Comment Drawer -->
-{#if commentCardId}
-  {@const card = cards.find(c => c.id === commentCardId)}
-  <div class="fixed inset-0 z-50 flex justify-end" onclick={(e) => e.target === e.currentTarget && (commentCardId = null)}>
-    <div class="w-full max-w-sm bg-white border-l border-gray-200 shadow-2xl flex flex-col h-full">
-      <!-- Header -->
-      <div class="px-5 py-4 border-b border-gray-200 flex items-start justify-between">
-        <div class="min-w-0 flex-1 pr-3">
-          <h3 class="text-[14px] font-semibold text-gray-900 mb-0.5 truncate">{card?.title ?? 'Comments'}</h3>
-          <p class="text-[11px] text-gray-500">{commentList.length} comment{commentList.length !== 1 ? 's' : ''}</p>
-        </div>
-        <button onclick={() => commentCardId = null} class="p-1.5 hover:bg-gray-100 rounded-md transition-colors shrink-0">
-          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-500"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
-
-      <!-- Comments list -->
-      <div class="flex-1 overflow-y-auto p-5 space-y-4">
-        {#if commentLoading}
-          <p class="text-[13px] text-gray-400 text-center py-8">Loading...</p>
-        {:else if commentList.length === 0}
-          <div class="text-center py-10">
-            <svg class="mx-auto mb-3 text-gray-300" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            <p class="text-[13px] text-gray-400">No comments yet. Be the first!</p>
-          </div>
-        {:else}
-          {#each commentList as comment}
-            <div class="flex gap-3">
-              <div class="w-7 h-7 rounded-full {comment.authorColor} flex items-center justify-center text-white text-[10px] font-semibold shrink-0 mt-0.5">
-                {comment.authorInitials}
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="flex items-baseline gap-2 mb-1">
-                  <span class="text-[12px] font-semibold text-gray-900">{comment.authorName}</span>
-                  <span class="text-[10px] text-gray-400">{new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                </div>
-                <p class="text-[13px] text-gray-700 leading-relaxed">{comment.content}</p>
-              </div>
-            </div>
-          {/each}
-        {/if}
-      </div>
-
-      <!-- Input -->
-      <div class="p-4 border-t border-gray-200">
-        {#if me}
-          <div class="flex gap-2 items-end">
-            <div class="w-7 h-7 rounded-full {me.color} flex items-center justify-center text-white text-[10px] font-semibold shrink-0">
-              {me.initials}
-            </div>
-            <div class="flex-1 flex gap-2">
-              <textarea
-                bind:value={commentInput}
-                onkeydown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postComment(); } }}
-                placeholder="Add a comment..."
-                rows="2"
-                class="flex-1 px-3 py-2 bg-[#FAFAF9] border border-gray-200 rounded-lg text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none"
-              ></textarea>
-              <button
-                onclick={postComment}
-                disabled={commentPosting || !commentInput.trim()}
-                class="px-3 py-2 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[12px] font-medium transition-colors disabled:opacity-50 self-end">
-                {commentPosting ? '...' : 'Post'}
-              </button>
-            </div>
-          </div>
-          <p class="text-[10px] text-gray-400 mt-1.5 ml-9">Enter to post · Shift+Enter for new line</p>
-        {:else}
-          <p class="text-[12px] text-gray-400 text-center">Join the workshop to comment.</p>
-        {/if}
-      </div>
-    </div>
-  </div>
-{/if}
-
-<!-- Edit Use Case Modal -->
+<!-- Edit Use Case Modal (includes additional details + comments) -->
 {#if selectedCardId}
   {@const editingCard = cards.find(c => c.id === selectedCardId)}
   <div class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onclick={(e) => e.target === e.currentTarget && deselectCard()}>
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-      <div class="flex items-start justify-between mb-5">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col" style="max-height: calc(100vh - 48px)">
+
+      <!-- Header -->
+      <div class="flex items-start justify-between px-6 py-5 border-b border-gray-100 shrink-0">
         <div>
           <h3 class="text-[18px] text-gray-900 font-bold">Edit Use Case</h3>
           {#if editingCard}
@@ -1542,55 +1596,161 @@
         </button>
       </div>
 
-      <div class="space-y-4">
+      <!-- Scrollable body -->
+      <div class="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+
+        <!-- Core fields -->
         <div>
-          <label for="edit-title" class="block text-[12px] text-gray-600 font-medium mb-1">Title</label>
+          <label for="edit-title" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Title</label>
           <input id="edit-title" type="text" bind:value={editTitle} maxlength="80"
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695]"
+            class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9]"
             placeholder="Short descriptive title" />
         </div>
         <div>
-          <label for="edit-summary" class="block text-[12px] text-gray-600 font-medium mb-1">Summary</label>
+          <label for="edit-summary" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Summary</label>
           <textarea id="edit-summary" bind:value={editSummary} rows="3"
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none"
+            class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none bg-[#FAFAF9]"
             placeholder="One sentence describing the AI use case"></textarea>
         </div>
         <div>
           <label for="edit-context" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Context / Notes</label>
           <textarea id="edit-context" bind:value={editContext} rows="2"
             placeholder="Additional context or implementation notes..."
-            class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none bg-[#FAFAF9] transition-colors"></textarea>
+            class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none bg-[#FAFAF9]"></textarea>
         </div>
         <div class="grid grid-cols-3 gap-3">
           <div>
-            <label for="edit-value" class="block text-[12px] text-gray-600 font-medium mb-1">Value</label>
+            <label for="edit-value" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Value</label>
             <select id="edit-value" bind:value={editValue}
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-white">
+              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9]">
               <option>High</option><option>Medium</option><option>Low</option>
             </select>
           </div>
           <div>
-            <label for="edit-viability" class="block text-[12px] text-gray-600 font-medium mb-1">Viability</label>
+            <label for="edit-viability" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Viability</label>
             <select id="edit-viability" bind:value={editViability}
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-white">
+              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9]">
               <option>High</option><option>Medium</option><option>Low</option>
             </select>
           </div>
           <div>
-            <label for="edit-visibility" class="block text-[12px] text-gray-600 font-medium mb-1">Visibility</label>
+            <label for="edit-visibility" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Visibility</label>
             <select id="edit-visibility" bind:value={editVisibility}
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-white">
+              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9]">
               <option>Internal</option><option>Restricted</option><option>Cross-Silo</option>
             </select>
           </div>
         </div>
+
+        <!-- Additional Details (collapsible) -->
+        <div class="border-t border-gray-100 pt-4">
+          <button type="button" onclick={() => showEditAdditionalDetails = !showEditAdditionalDetails}
+            class="flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-gray-700 font-semibold uppercase tracking-wide transition-colors">
+            <svg class="w-3 h-3 transition-transform {showEditAdditionalDetails ? 'rotate-90' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+            Additional Details
+          </button>
+          {#if showEditAdditionalDetails}
+            <div class="space-y-3 mt-3">
+              <div>
+                <label for="edit-problem" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Problem Statement</label>
+                <textarea id="edit-problem" bind:value={editProblemStatement} rows="2" placeholder="What specific problem are we solving?"
+                  class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none bg-[#FAFAF9]"></textarea>
+              </div>
+              <div>
+                <label for="edit-solution" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Solution Overview</label>
+                <textarea id="edit-solution" bind:value={editSolutionOverview} rows="2" placeholder="How does AI solve this problem?"
+                  class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none bg-[#FAFAF9]"></textarea>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label for="edit-units" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Business Units</label>
+                  <input id="edit-units" type="text" bind:value={editBusinessUnits} placeholder="e.g. Finance, Ops (comma-sep)"
+                    class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9]" />
+                </div>
+                <div>
+                  <label for="edit-timeline" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Timeline</label>
+                  <input id="edit-timeline" type="text" bind:value={editTimeline} placeholder="e.g. Q3 2025, 6 months"
+                    class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9]" />
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label for="edit-costs" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Estimated Costs</label>
+                  <input id="edit-costs" type="text" bind:value={editCosts} placeholder="e.g. $50k–$150k"
+                    class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9]" />
+                </div>
+                <div>
+                  <label for="edit-legal" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Legal & Compliance</label>
+                  <input id="edit-legal" type="text" bind:value={editLegalCompliance} placeholder="e.g. HIPAA, SOC 2"
+                    class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9]" />
+                </div>
+              </div>
+            </div>
+          {/if}
+        </div>
+
+        <!-- Comments -->
+        <div class="border-t border-gray-100 pt-4">
+          <p class="text-[11px] text-gray-400 font-semibold uppercase tracking-wide mb-3">Comments · {commentList.length}</p>
+          {#if commentLoading}
+            <p class="text-[13px] text-gray-400 py-4 text-center">Loading...</p>
+          {:else if commentList.length === 0}
+            <p class="text-[13px] text-gray-400 py-4 text-center">No comments yet. Be the first!</p>
+          {:else}
+            <div class="space-y-3 mb-4">
+              {#each commentList as comment}
+                <div class="flex gap-3">
+                  <div class="w-7 h-7 rounded-full {comment.authorColor} flex items-center justify-center text-white text-[10px] font-semibold shrink-0 mt-0.5">
+                    {comment.authorInitials}
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-baseline gap-2 mb-0.5">
+                      <span class="text-[12px] font-semibold text-gray-900">{comment.authorName}</span>
+                      <span class="text-[10px] text-gray-400">{new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    <p class="text-[13px] text-gray-700 leading-relaxed">{comment.content}</p>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          {#if me}
+            <div class="flex gap-2 items-end">
+              <div class="w-7 h-7 rounded-full {me.color} flex items-center justify-center text-white text-[10px] font-semibold shrink-0">
+                {me.initials}
+              </div>
+              <div class="flex-1 flex gap-2">
+                <textarea
+                  bind:value={commentInput}
+                  onkeydown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postComment(); } }}
+                  placeholder="Add a comment..."
+                  rows="2"
+                  class="flex-1 px-3 py-2 bg-[#FAFAF9] border border-gray-200 rounded-lg text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#6B9695] resize-none"
+                ></textarea>
+                <button
+                  onclick={postComment}
+                  disabled={commentPosting || !commentInput.trim()}
+                  class="px-3 py-2 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[12px] font-medium transition-colors disabled:opacity-50 self-end">
+                  {commentPosting ? '...' : 'Post'}
+                </button>
+              </div>
+            </div>
+            <p class="text-[10px] text-gray-400 mt-1.5 ml-9">Enter to post · Shift+Enter for new line</p>
+          {:else}
+            <p class="text-[12px] text-gray-400 text-center">Join the workshop to comment.</p>
+          {/if}
+        </div>
       </div>
 
-      <div class="mt-5 pt-4 border-t border-gray-100">
-        <p class="text-[11px] text-gray-400 mb-4">Tip: use the AI Analyst panel to suggest changes — click "Apply Changes" to auto-fill these fields.</p>
+      <!-- Footer actions -->
+      <div class="px-6 py-4 border-t border-gray-100 shrink-0">
+        <p class="text-[11px] text-gray-400 mb-3">Tip: use the AI Analyst panel to suggest changes — click "Apply Changes" to auto-fill these fields.</p>
         <div class="flex gap-3">
           <button onclick={deselectCard}
-            class="flex-1 py-2.5 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-[13px] font-medium transition-colors">
+            class="flex-1 py-2.5 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-lg text-[13px] font-medium transition-colors">
             Cancel
           </button>
           <button onclick={saveCardEdit} disabled={savingEdit || !editTitle.trim()}

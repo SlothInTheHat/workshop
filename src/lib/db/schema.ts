@@ -131,6 +131,12 @@ export const useCases = pgTable('use_cases', {
     .references(() => insights.id),
   collaborators: text('collaborators').array().notNull().default([]),
   pillarTags: jsonb('pillar_tags').$type<string[]>().default([]),
+  problemStatement: text('problem_statement'),
+  solutionOverview: text('solution_overview'),
+  businessUnits: text('business_units').array().notNull().default([]),
+  timeline: text('timeline'),
+  costs: text('costs'),
+  legalCompliance: text('legal_compliance'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

@@ -26,6 +26,14 @@ export const POST = async ({ request, params }: RequestEvent) => {
     ? `Workshop: "${workshop.title}" for client "${workshop.client}". Status: ${workshop.status}.`
     : `Workshop ID: ${workshopId}`;
 
+  const objectiveContext = workshop?.objective
+    ? `\nWorkshop Objective: ${workshop.objective}`
+    : '';
+
+  const pillarsContext = (workshop as any)?.strategicPillars?.length
+    ? `\nStrategic Pillars: ${(workshop as any).strategicPillars.join(', ')}`
+    : '';
+
   // Edit mode — focus on the specific card
   const targetCard = useCaseId ? useCases.get(useCaseId) : null;
 
@@ -37,7 +45,7 @@ export const POST = async ({ request, params }: RequestEvent) => {
     ? `You are an AI Analyst helping a participant improve an existing use case in a live workshop.
 
 Context:
-${workshopContext}
+${workshopContext}${objectiveContext}${pillarsContext}
 Participants: ${participants.map(p => p.name).join(', ')}
 
 USE CASE BEING EDITED:
@@ -60,7 +68,8 @@ Your role:
   "title": "Improved title (max 8 words)",
   "summary": "Improved one-sentence description",
   "value": "High|Medium|Low",
-  "viability": "High|Medium|Low"
+  "viability": "High|Medium|Low",
+  "pillarTags": ["Pillar Name"]
 }
 </usecase_preview>
 
@@ -68,7 +77,7 @@ Keep responses concise (1-2 sentences). Use "Value" (not Impact) and "Viability"
     : `You are an AI Analyst helping participants in a live AI use case workshop structure their ideas into actionable AI use cases.
 
 Context:
-${workshopContext}
+${workshopContext}${objectiveContext}${pillarsContext}
 Participants: ${participants.map(p => p.name).join(', ')}
 
 ${usecaseContext}
@@ -83,13 +92,14 @@ Your role:
   "title": "Short descriptive title (max 8 words)",
   "summary": "One sentence describing the AI use case",
   "value": "High|Medium|Low",
-  "viability": "High|Medium|Low"
+  "viability": "High|Medium|Low",
+  "pillarTags": ["Most relevant strategic pillar"]
 }
 </usecase_preview>
 
 Keep responses concise (2-3 sentences max). Ask one focused question at a time. Only generate the preview once you understand the core problem, who benefits, and what AI capability would help.
 
-Use "Value" (not Impact) and "Viability" (not Feasibility).`;
+Use "Value" (not Impact) and "Viability" (not Feasibility). When suggesting pillarTags, choose from the workshop's strategic pillars if available.`;
 
   const messages: Anthropic.MessageParam[] = [
     ...history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),

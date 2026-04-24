@@ -42,7 +42,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
   const body = await request.json().catch(() => null);
   if (!body) throw error(400, 'Invalid JSON body');
 
-  const { title, summary, value, viability, visibility, teamId, participantId, position, collaborators, context } = body;
+  const { title, summary, value, viability, visibility, teamId, participantId, position, collaborators, context, pillarTags, problemStatement, solutionOverview, businessUnits, timeline, costs, legalCompliance } = body;
 
   if (!title || typeof title !== 'string') throw error(400, 'title is required');
   if (!summary || typeof summary !== 'string') throw error(400, 'summary is required');
@@ -160,6 +160,13 @@ export const POST: RequestHandler = async ({ params, request }) => {
       position: position && typeof position.x === 'number' ? position : undefined,
       collaborators: Array.isArray(collaborators) ? collaborators : undefined,
       context: context ?? '',
+      pillarTags: Array.isArray(pillarTags) ? pillarTags : undefined,
+      problemStatement: typeof problemStatement === 'string' ? problemStatement : undefined,
+      solutionOverview: typeof solutionOverview === 'string' ? solutionOverview : undefined,
+      businessUnits: Array.isArray(businessUnits) ? businessUnits : undefined,
+      timeline: typeof timeline === 'string' ? timeline : undefined,
+      costs: typeof costs === 'string' ? costs : undefined,
+      legalCompliance: typeof legalCompliance === 'string' ? legalCompliance : undefined,
     });
 
     // Auto-tag with strategic pillars

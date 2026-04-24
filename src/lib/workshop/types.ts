@@ -83,6 +83,12 @@ export interface UseCase {
   whyItMatters?: string;
   context?: string;
   pillarTags?: string[];
+  problemStatement?: string;
+  solutionOverview?: string;
+  businessUnits?: string[];
+  timeline?: string;
+  costs?: string;
+  legalCompliance?: string;
 }
 
 export interface Insight {
