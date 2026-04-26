@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import Anthropic from '@anthropic-ai/sdk';
+import { ANTHROPIC_API_KEY } from '$env/static/private';
 
 // POST /api/ai/kickoff-summary — generate a kickoff summary from workshop setup details
 export const POST: RequestHandler = async ({ request }) => {
@@ -13,10 +14,9 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	if (!body.title?.trim()) error(400, 'title is required');
 
-	const apiKey = process.env.ANTHROPIC_API_KEY;
-	if (!apiKey) error(500, 'ANTHROPIC_API_KEY is not configured');
+	if (!ANTHROPIC_API_KEY) error(500, 'ANTHROPIC_API_KEY is not configured');
 
-	const client = new Anthropic({ apiKey });
+	const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 	const prompt = `You are an expert workshop facilitator. Generate a concise, professional kickoff summary for a discovery workshop.
 

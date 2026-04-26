@@ -15,13 +15,6 @@ export const POST: RequestHandler = async ({ params }) => {
     });
     if (!workshop) throw error(404, 'Workshop not found');
 
-    // Verify participant exists and belongs to this workshop
-    const participant = await db.query.participants.findFirst({
-      where: eq(schema.participants.id, participantId),
-    });
-    if (!participant) throw error(404, 'Participant not found');
-    if (participant.workshopId !== workshopId) throw error(400, 'Participant not in this workshop');
-
     // Get current finishedVoting array
     const finishedVoting = Array.isArray(workshop.finishedVoting) ? workshop.finishedVoting : [];
 
@@ -43,10 +36,6 @@ export const POST: RequestHandler = async ({ params }) => {
     // In-memory logic
     const workshop = workshops.get(workshopId);
     if (!workshop) throw error(404, 'Workshop not found');
-
-    const participant = participants.get(participantId);
-    if (!participant) throw error(404, 'Participant not found');
-    if (participant.workshopId !== workshopId) throw error(400, 'Participant not in this workshop');
 
     // Initialize finishedVoting set if it doesn't exist
     if (!workshop.finishedVoting) {

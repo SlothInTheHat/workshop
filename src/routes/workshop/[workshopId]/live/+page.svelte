@@ -777,7 +777,24 @@
     v === 'Cross-Silo' ? 'bg-purple-50 text-purple-700 border-purple-200' :
     'bg-gray-50 text-gray-600 border-gray-200';
 
+  // ── Complete Workshop ─────────────────────────────────────────────────────────
+
+  async function completeWorkshop() {
+    try {
+      await fetch(`/api/workshop/${workshopId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'summary' })
+      });
+    } catch (err) {
+      console.error('[Complete] Failed to update status:', err);
+    }
+    window.location.href = `/workshops/${workshopId}/post`;
+  }
+
   // ── SSE ───────────────────────────────────────────────────────────────────────
+
+  let statusPollInterval: ReturnType<typeof setInterval>;
 
   onMount(() => {
     eventSource = new EventSource(`/api/workshop/${workshopId}/stream`);
@@ -787,10 +804,28 @@
         handleSSEEvent(event);
       } catch {}
     };
+
+    // Poll workshop status every 3 seconds to detect when facilitator completes workshop
+    statusPollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/workshop/${workshopId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.workshop?.status === 'summary' ||
+              data.workshop?.status === 'completed') {
+            clearInterval(statusPollInterval);
+            window.location.href = `/workshops/${workshopId}/post`;
+          }
+        }
+      } catch (err) {
+        console.error('[Poll] Status check failed:', err);
+      }
+    }, 3000);
   });
 
   onDestroy(() => {
     eventSource?.close();
+    if (statusPollInterval) clearInterval(statusPollInterval);
   });
 
   function handleSSEEvent(event: WorkshopEvent) {
@@ -881,7 +916,7 @@
           Add Use Case
         </button>
       {/if}
-      <button onclick={() => goto(`/workshops/${workshopId}/post`)}
+      <button onclick={completeWorkshop}
         class="px-3 py-1.5 bg-gray-800 text-white hover:bg-gray-900 rounded-lg text-[12px] font-medium transition-colors">
         Complete Workshop
       </button>
@@ -1141,7 +1176,7 @@
             >
               <!-- Team + AI row -->
               <div class="flex items-center justify-between mb-2">
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium whitespace-nowrap">
                   {teamName(card.teamId)}
                 </span>
                 <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6B9695" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-40"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
@@ -1166,7 +1201,7 @@
                 <div class="mb-2 flex flex-wrap gap-1">
                   {#each card.collaborators as name}
                     <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] bg-gray-100 text-gray-600 border border-gray-200">
-                      👤 {name.split(' ')[0]}
+                      {name.split(' ')[0]}
                     </span>
                   {/each}
                 </div>

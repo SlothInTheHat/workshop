@@ -18,10 +18,10 @@
   ];
 
   const activityLog = [
-    { icon: '✏️', text: 'AI System generated workshop context from stakeholder inputs', time: 'Just now' },
-    { icon: '👤', text: 'Admin User invited someone as contributor', time: 'Just now' },
-    { icon: '➕', text: 'Admin User created this workshop', time: '2 hours ago' },
-    { icon: '📄', text: 'John Smith completed pre-workshop input', time: '1 hour ago' },
+    { icon: '•', text: 'AI System generated workshop context from stakeholder inputs', time: 'Just now' },
+    { icon: '•', text: 'Admin User invited someone as contributor', time: 'Just now' },
+    { icon: '+', text: 'Admin User created this workshop', time: '2 hours ago' },
+    { icon: '•', text: 'John Smith completed pre-workshop input', time: '1 hour ago' },
   ];
 
   const getRoleBadgeColor = (role: string) => {

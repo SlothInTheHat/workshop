@@ -19,6 +19,7 @@ export const GET: RequestHandler = async ({ params }) => {
     if (workshop) {
       const workshopTeams = await db.query.teams.findMany({
         where: eq(schema.teams.workshopId, params.workshopId),
+        limit: 2,
       });
 
       const workshopParticipants = await db.query.participants.findMany({
@@ -46,4 +47,35 @@ export const GET: RequestHandler = async ({ params }) => {
   const useCaseCount = getWorkshopUseCases(params.workshopId).length;
 
   return json({ workshop, teams: workshopTeams, participants: workshopParticipants, useCaseCount });
+};
+
+export const PATCH: RequestHandler = async ({ params, request }) => {
+  const body = await request.json();
+
+  if (isDatabaseEnabled && db) {
+    // Update workshop in database
+    const updates: Partial<typeof schema.workshops.$inferInsert> = {};
+    if (body.status !== undefined) updates.status = body.status;
+
+    await db
+      .update(schema.workshops)
+      .set(updates)
+      .where(eq(schema.workshops.id, params.workshopId));
+
+    const updatedWorkshop = await db.query.workshops.findFirst({
+      where: eq(schema.workshops.id, params.workshopId),
+    });
+
+    return json({ workshop: updatedWorkshop });
+  }
+
+  // In-memory store
+  const workshop = workshops.get(params.workshopId);
+  if (!workshop) throw error(404, 'Workshop not found');
+
+  if (body.status !== undefined) {
+    workshop.status = body.status;
+  }
+
+  return json({ workshop });
 };

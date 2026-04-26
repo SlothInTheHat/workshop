@@ -20,12 +20,11 @@ export const GET: RequestHandler = async ({ params }) => {
       where: eq(schema.participants.workshopId, workshopId),
     });
 
-    const contributors = allParticipants.filter((p) => p.role === 'contributor');
-
     const finishedVoting = Array.isArray(workshop.finishedVoting) ? workshop.finishedVoting : [];
     const finishedCount = finishedVoting.length;
-    // If no contributors found, fall back to counting all participants
-    const totalParticipants = contributors.length > 0 ? contributors.length : allParticipants.length;
+    // Count all participants (contributors + facilitators)
+    const totalParticipants = allParticipants.length;
+    // Everyone must finish voting before moving to Round 2
     const allFinished = finishedCount >= totalParticipants && totalParticipants > 0;
 
     return json({
@@ -40,12 +39,12 @@ export const GET: RequestHandler = async ({ params }) => {
     if (!workshop) throw error(404, 'Workshop not found');
 
     const allParticipants = getWorkshopParticipants(workshopId);
-    const contributors = allParticipants.filter((p) => p.role === 'contributor');
 
     const finishedVoting = workshop.finishedVoting || new Set<string>();
     const finishedCount = finishedVoting.size;
-    // If no contributors found, fall back to counting all participants
-    const totalParticipants = contributors.length > 0 ? contributors.length : allParticipants.length;
+    // Count all participants (contributors + facilitators)
+    const totalParticipants = allParticipants.length;
+    // Everyone must finish voting before moving to Round 2
     const allFinished = finishedCount >= totalParticipants && totalParticipants > 0;
 
     return json({

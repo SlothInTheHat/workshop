@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PageData } from './$types';
+  import jsPDF from 'jspdf';
 
   let { data }: { data: PageData } = $props();
 
@@ -75,14 +76,14 @@
   };
 
   const actionIcon = (action: string) => {
-    if (action === 'workshop_created') return '➕';
-    if (action === 'participant_added') return '👤';
-    if (action === 'participant_removed') return '🗑️';
-    if (action === 'input_submitted') return '📄';
-    if (action === 'artifact_uploaded') return '📎';
-    if (action === 'context_generated') return '✨';
-    if (action === 'workshop_launched') return '🚀';
-    return '✏️';
+    if (action === 'workshop_created') return '+';
+    if (action === 'participant_added') return '•';
+    if (action === 'participant_removed') return '×';
+    if (action === 'input_submitted') return '•';
+    if (action === 'artifact_uploaded') return '•';
+    if (action === 'context_generated') return '•';
+    if (action === 'workshop_launched') return '•';
+    return '•';
   };
 
   const actionText = (action: string) => {
@@ -281,13 +282,53 @@
 
   function downloadSummary() {
     if (!workshop.kickoffSummary) return;
-    const blob = new Blob([`KICKOFF SUMMARY\n${workshop.title}\n\n${workshop.kickoffSummary}`], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${workshop.title.replace(/[^a-z0-9]/gi, '_')}_kickoff_summary.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+
+    const doc = new jsPDF();
+    let yPos = 20;
+
+    // Title
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Kickoff Summary', 20, yPos);
+    yPos += 10;
+
+    // Workshop Title
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'normal');
+    doc.text(workshop.title, 20, yPos);
+    yPos += 15;
+
+    // Summary Content
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const maxWidth = pageWidth - (margin * 2);
+
+    // Split summary into paragraphs
+    const paragraphs = workshop.kickoffSummary.split('\n\n');
+
+    for (const paragraph of paragraphs) {
+      if (!paragraph.trim()) continue;
+
+      const lines = doc.splitTextToSize(paragraph, maxWidth);
+
+      for (const line of lines) {
+        if (yPos > 270) {
+          doc.addPage();
+          yPos = 20;
+        }
+        doc.text(line, margin, yPos);
+        yPos += 6;
+      }
+
+      yPos += 4; // Extra space between paragraphs
+    }
+
+    // Download
+    const filename = `${workshop.title.replace(/[^a-z0-9]/gi, '_')}_kickoff_summary.pdf`;
+    doc.save(filename);
   }
 
   async function addTeam() {
@@ -368,7 +409,7 @@
           disabled={launching}
           class="flex items-center gap-2 px-5 py-2.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg transition-colors text-[13px] font-medium disabled:opacity-50"
         >
-          🚀 {launching ? 'Launching...' : 'Launch Workshop'}
+          {launching ? 'Launching...' : 'Launch Workshop'}
         </button>
       {:else}
         <a href="/workshop/{workshop.id}/live" class="px-5 py-2.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[13px] font-medium transition-colors">
@@ -464,7 +505,7 @@
                     disabled={generatingPillars || stats.submittedCount === 0}
                     class="px-3 py-1.5 bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-lg text-[11px] font-medium transition-colors disabled:opacity-50"
                   >
-                    {generatingPillars ? 'Generating...' : '✨ AI Generate'}
+                    {generatingPillars ? 'Generating...' : 'AI Generate'}
                   </button>
                 </div>
 
@@ -500,7 +541,7 @@
                         onclick={downloadSummary}
                         class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-[11px] font-medium transition-colors"
                       >
-                        📥 Download
+                        Download
                       </button>
                     {/if}
                     <button
@@ -508,7 +549,7 @@
                       disabled={generatingSummary || stats.submittedCount === 0}
                       class="px-3 py-1.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[11px] font-medium transition-colors disabled:opacity-50"
                     >
-                      {generatingSummary ? 'Generating...' : workshop.kickoffSummary ? '🔄 Regenerate' : '✨ Generate Summary'}
+                      {generatingSummary ? 'Generating...' : workshop.kickoffSummary ? 'Regenerate' : 'Generate Summary'}
                     </button>
                   </div>
                 </div>
@@ -649,7 +690,6 @@
                   {#each artifacts as a}
                     <div class="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
                       <div class="flex items-center gap-3">
-                        <span class="text-base">📎</span>
                         <div>
                           <p class="text-[13px] text-gray-900 font-medium">{a.title}</p>
                           <a href={a.storageUrl} target="_blank" rel="noopener" class="text-[11px] text-[#6B9695] hover:underline">{a.storageUrl.slice(0, 60)}{a.storageUrl.length > 60 ? '…' : ''}</a>
@@ -704,7 +744,7 @@
                     <svg class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                     Generating...
                   {:else}
-                    ✨ Generate from Inputs
+                    Generate from Inputs
                   {/if}
                 </button>
               </div>
@@ -730,12 +770,11 @@
                     {savingContext ? 'Saving...' : 'Save Changes'}
                   </button>
                   {#if contextSaved}
-                    <span class="text-[12px] text-green-600 font-medium">✅ Saved</span>
+                    <span class="text-[12px] text-green-600 font-medium">Saved</span>
                   {/if}
                 </div>
               {:else}
                 <div class="border border-dashed border-gray-300 rounded-lg p-12 text-center">
-                  <p class="text-base mb-2">✨</p>
                   <p class="text-[14px] font-medium text-gray-700 mb-1">No context generated yet</p>
                   <p class="text-[13px] text-gray-400">
                     {stats.submittedCount > 0
@@ -869,7 +908,7 @@
               { label: 'AI context generated', done: !!workshop.aiContext },
             ] as item}
               <div class="flex items-center gap-2 py-1">
-                <span class="text-sm">{item.done ? '✅' : '○'}</span>
+                <span class="text-sm">{item.done ? '•' : '○'}</span>
                 <span class="text-[13px] {item.done ? 'text-gray-900 font-medium' : 'text-gray-500'}">{item.label}</span>
               </div>
             {/each}

@@ -25,7 +25,8 @@
       "Bash(/opt/homebrew/Cellar/postgresql@15/15.15_1/bin/psql:*)",
       "Bash(DATABASE_URL=postgresql://ayaanchawla@localhost:5432/optura npx drizzle-kit push:*)",
       "Bash(DATABASE_URL=postgresql://ayaanchawla@localhost:5432/optura psql:*)",
-      "Bash(DATABASE_URL=postgresql://ayaanchawla@localhost:5432/optura pnpm db:seed:*)"
+      "Bash(DATABASE_URL=postgresql://ayaanchawla@localhost:5432/optura pnpm db:seed:*)",
+      "Bash(cat:*)"
     ]
   }
 }

@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { getDb, schema } from '$lib/db/index';
 import { eq } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
+import { ANTHROPIC_API_KEY } from '$env/static/private';
 
 // POST /api/workshops/[id]/context — generate AI context from submitted inputs
 export const POST: RequestHandler = async ({ params, request }) => {
@@ -32,10 +33,9 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		error(400, 'No contributor inputs found. Ask contributors to submit their pre-workshop input first.');
 	}
 
-	const apiKey = process.env.ANTHROPIC_API_KEY;
-	if (!apiKey) error(500, 'ANTHROPIC_API_KEY is not configured');
+	if (!ANTHROPIC_API_KEY) error(500, 'ANTHROPIC_API_KEY is not configured');
 
-	const client = new Anthropic({ apiKey });
+	const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 	const inputSummaries = inputs
 		.map((inp) => {

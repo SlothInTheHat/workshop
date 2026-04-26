@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -19,6 +20,36 @@
 
   // Track whether input record exists on server
   let inputCreated = $state(data.existingInput !== null);
+
+  // Workshop status polling
+  let statusPollInterval: ReturnType<typeof setInterval>;
+  let workshopStarting = $state(false);
+
+  onMount(() => {
+    // Poll workshop status every 3 seconds
+    statusPollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/workshops/${workshop.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.workshop.status === 'live') {
+            clearInterval(statusPollInterval);
+            workshopStarting = true;
+            // Show overlay for 1 second before redirecting
+            setTimeout(() => {
+              window.location.href = `/workshop/${workshop.id}/live`;
+            }, 1000);
+          }
+        }
+      } catch (err) {
+        console.error('[Poll] Status check failed:', err);
+      }
+    }, 3000);
+  });
+
+  onDestroy(() => {
+    if (statusPollInterval) clearInterval(statusPollInterval);
+  });
 
   const isFilled = (v: string) => v.trim().length > 0;
 
@@ -158,7 +189,6 @@
     {#if submitted}
       <!-- Submitted confirmation -->
       <div class="bg-white rounded-lg border border-gray-200 p-8 text-center">
-        <p class="text-3xl mb-3">✅</p>
         <h2 class="text-[18px] text-gray-900 font-semibold mb-2">Input Submitted!</h2>
         <p class="text-[13px] text-gray-500 mb-6">Your pre-workshop input has been received. The facilitator will review it before the live session.</p>
 
@@ -195,7 +225,7 @@
                 {#if saveStatus === 'saving'}
                   <span class="text-[11px] text-gray-400">Saving...</span>
                 {:else if saveStatus === 'saved'}
-                  <span class="text-[11px] text-green-600">✅ Saved</span>
+                  <span class="text-[11px] text-green-600">Saved</span>
                 {:else if saveStatus === 'error'}
                   <span class="text-[11px] text-red-500">Save failed</span>
                 {/if}
@@ -287,7 +317,6 @@
           {#if workshop.kickoffSummary}
             <div class="bg-[#F9F9F8] rounded-lg border border-gray-200 p-5">
               <div class="flex items-start gap-2 mb-3">
-                <span class="text-base">✨</span>
                 <h3 class="text-[13px] text-gray-900 font-semibold">AI Kickoff Summary</h3>
               </div>
               <div class="text-[13px] text-gray-700 leading-relaxed space-y-2">
@@ -306,7 +335,7 @@
             <div class="space-y-2">
               {#each sections as s, i}
                 <div class="flex items-center gap-2.5 py-1">
-                  <span class="text-sm">{isFilled(s.value) ? '✅' : '○'}</span>
+                  <span class="text-sm">{isFilled(s.value) ? '•' : '○'}</span>
                   <span class="text-[13px] {isFilled(s.value) ? 'text-gray-900 font-medium' : 'text-gray-500'}">{s.label}</span>
                 </div>
               {/each}
@@ -325,7 +354,6 @@
                     rel="noopener"
                     class="flex items-start gap-2.5 py-2 hover:opacity-80 transition-opacity"
                   >
-                    <span class="text-base mt-0.5">📎</span>
                     <div class="min-w-0">
                       <p class="text-[13px] text-gray-900 font-medium">{a.title}</p>
                       <p class="text-[11px] text-[#6B9695] truncate">{a.storageUrl.slice(0, 40)}…</p>
@@ -340,3 +368,16 @@
     {/if}
   </div>
 </div>
+
+<!-- Workshop Starting Overlay -->
+{#if workshopStarting}
+  <div class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-8 max-w-md mx-4 text-center shadow-2xl">
+      <div class="w-16 h-16 mx-auto mb-4 relative">
+        <div class="absolute inset-0 border-4 border-[#6B9695] border-t-transparent rounded-full animate-spin"></div>
+      </div>
+      <h2 class="text-[20px] text-gray-900 font-bold mb-2">Workshop is starting...</h2>
+      <p class="text-[14px] text-gray-600">Redirecting you to the live workshop</p>
+    </div>
+  </div>
+{/if}

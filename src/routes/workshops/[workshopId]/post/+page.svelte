@@ -52,6 +52,12 @@
     await loadWorkshopData();
     await loadVotingStatus();
 
+    // Start polling voting status for all participants
+    // This ensures everyone sees the transition when anyone finishes voting
+    pollInterval = setInterval(async () => {
+      await loadVotingStatus();
+    }, 3000);
+
     return () => {
       if (pollInterval) clearInterval(pollInterval);
     };
@@ -108,9 +114,12 @@
         votingStatus = await res.json();
         hasFinishedVoting = votingStatus.finishedParticipantIds.includes(currentParticipantId);
 
-        // If all finished, transition to Round 2
+        // If all finished, transition to Round 2 and load data
         if (votingStatus.allFinished && activePhase === 'round1') {
           activePhase = 'round2';
+          await loadStackRank();
+          // Stop polling once everyone is done
+          if (pollInterval) clearInterval(pollInterval);
         }
       }
     } catch (err) {
@@ -119,24 +128,31 @@
   }
 
   async function finishVoting() {
+    console.log('[FINISH VOTING] Starting, participantId:', currentParticipantId);
     showFinishConfirmation = false;
 
     try {
-      const res = await fetch(`/api/workshop/${workshopId}/participants/${currentParticipantId}/finish-voting`, {
+      const url = `/api/workshop/${workshopId}/participants/${currentParticipantId}/finish-voting`;
+      console.log('[FINISH VOTING] Calling:', url);
+
+      const res = await fetch(url, {
         method: 'POST',
       });
 
+      console.log('[FINISH VOTING] Response status:', res.status);
+
       if (res.ok) {
+        console.log('[FINISH VOTING] Success! Marked as finished');
         hasFinishedVoting = true;
 
-        // Start polling voting status
-        if (pollInterval) clearInterval(pollInterval);
-        pollInterval = setInterval(async () => {
-          await loadVotingStatus();
-        }, 3000);
+        // Polling is already running in onMount, so voting status will be checked automatically
+        // This will cause everyone to transition to Round 2 within 3 seconds when allFinished is true
+      } else {
+        const errorText = await res.text();
+        console.error('[FINISH VOTING] Failed:', res.status, res.statusText, errorText);
       }
     } catch (err) {
-      console.error('Failed to finish voting:', err);
+      console.error('[FINISH VOTING] Error:', err);
     }
   }
 
@@ -187,11 +203,11 @@
     }))
   );
 
-  // Strategic pillars from workshop data (hardcoded examples if none exist)
+  // Strategic pillars from workshop data (only use actual pillars, no dummy data)
   const strategicPillars = $derived(
     (workshop?.strategicPillars as string[] && (workshop.strategicPillars as string[]).length > 0)
       ? (workshop.strategicPillars as string[])
-      : ["Reduce OPEX", "Improve Patient Experience", "Regulatory Compliance", "Staff Productivity"]
+      : []
   );
 
   // Group use cases by pillar
@@ -242,7 +258,7 @@
   }
 
   async function handleUpvote(useCaseId: string) {
-    if (loadingUpvote[useCaseId] || hasFinishedVoting) return;
+    if (loadingUpvote[useCaseId]) return;
 
     loadingUpvote[useCaseId] = true;
     errorMessage = null;
@@ -612,7 +628,8 @@
   }
 </script>
 
-<div class="h-full flex flex-col max-w-7xl mx-auto pt-8 pb-12 bg-[#f5f5f0]">
+<div class="min-h-screen bg-[#f5f5f1]">
+<div class="h-full flex flex-col max-w-7xl mx-auto pt-8 pb-12">
   <!-- Page Header -->
   <div class="mb-6 px-6">
     <div class="flex items-center justify-between mb-5">
@@ -850,8 +867,8 @@
 
               <button
                 onclick={() => handleUpvote(useCase.id)}
-                disabled={loadingUpvote[useCase.id] || hasFinishedVoting}
-                class="ml-6 flex items-center gap-2 px-4 py-2 border border-gray-300 hover:border-[#6B9695] hover:bg-[#F0F9F9] rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed {useCase.hasUpvoted ? 'bg-[#F0F9F9] border-[#6B9695]' : ''} {hasFinishedVoting ? 'bg-gray-100 border-gray-200' : ''}"
+                disabled={loadingUpvote[useCase.id]}
+                class="ml-6 flex items-center gap-2 px-4 py-2 border border-gray-300 hover:border-[#6B9695] hover:bg-[#F0F9F9] rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed {useCase.hasUpvoted ? 'bg-[#F0F9F9] border-[#6B9695]' : ''}"
               >
                 {#if loadingUpvote[useCase.id]}
                   <div class="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
@@ -907,13 +924,12 @@
                   Ready to finish?
                 </h3>
                 <p class="text-[12px] text-blue-700" style="font-family: Inter, sans-serif; font-weight: 400">
-                  Vote on at least one use case before finishing.
+                  Click finish to proceed to Round 2.
                 </p>
               </div>
               <button
                 onclick={() => showFinishConfirmation = true}
-                disabled={!hasVotedOnAnyUseCase}
-                class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+                class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
               >
                 <span class="text-[13px]" style="font-family: Inter, sans-serif; font-weight: 600">
                   Finish Voting
@@ -1487,4 +1503,5 @@
       </div>
     </div>
   {/if}
+</div>
 </div>

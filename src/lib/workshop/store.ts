@@ -633,5 +633,6 @@ function seed(): void {
 // Load persisted data first
 loadPersistedData();
 
-// Always seed the in-memory store with workshop-1 for fallback/testing
-seed();
+// Seed function available but not called by default
+// Only used for development/testing if needed
+// seed();

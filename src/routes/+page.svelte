@@ -115,9 +115,9 @@
                   </div>
                   <div class="flex items-center">
                     <span class="text-[12px] text-gray-500 min-w-[120px]">Teams</span>
-                    <div class="flex gap-1.5">
-                      {#each teams ?? [] as team}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium">{team.name}</span>
+                    <div class="flex gap-1.5 flex-wrap">
+                      {#each (teams ?? []).slice(0, 2) as team}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium whitespace-nowrap">{team.name}</span>
                       {/each}
                     </div>
                   </div>
