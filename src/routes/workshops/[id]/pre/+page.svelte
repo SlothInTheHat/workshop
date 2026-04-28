@@ -464,7 +464,6 @@
             {#each [
               { id: 'overview', label: 'Overview' },
               { id: 'participants', label: `Participants (${participants.length})` },
-              { id: 'context', label: 'AI Context' },
               { id: 'teams', label: 'Teams' },
             ] as tab}
               <button
@@ -682,65 +681,8 @@
                 </button>
               </div>
 
-            <!-- AI CONTEXT -->
-            {:else}
-              <div class="flex items-start justify-between mb-5">
-                <div>
-                  <h2 class="text-[18px] text-gray-900 font-semibold mb-1">AI Workshop Context</h2>
-                  <p class="text-[13px] text-gray-500">Generated from submitted contributor inputs. Edit before the live session.</p>
-                </div>
-                <button
-                  onclick={generateContext}
-                  disabled={generatingContext}
-                  class="flex items-center gap-2 px-4 py-2 bg-white border border-[#6B9695] text-[#6B9695] hover:bg-[#F0F9F9] rounded-lg transition-colors text-[13px] font-medium disabled:opacity-50 ml-4 flex-shrink-0"
-                >
-                  {#if generatingContext}
-                    <svg class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                    Generating...
-                  {:else}
-                    Generate from Inputs
-                  {/if}
-                </button>
-              </div>
-
-              {#if contextError}
-                <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-                  <p class="text-[13px] text-red-700">{contextError}</p>
-                </div>
-              {/if}
-
-              {#if editableContext || workshop.aiContext}
-                <textarea
-                  bind:value={editableContext}
-                  rows={16}
-                  class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-[13px] text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#6B9695] focus:border-transparent resize-none"
-                ></textarea>
-                <div class="flex items-center gap-3 mt-3">
-                  <button
-                    onclick={saveContext}
-                    disabled={savingContext}
-                    class="px-4 py-2.5 bg-[#6B9695] hover:bg-[#5A8584] text-white rounded-lg text-[13px] font-medium transition-colors disabled:opacity-50"
-                  >
-                    {savingContext ? 'Saving...' : 'Save Changes'}
-                  </button>
-                  {#if contextSaved}
-                    <span class="text-[12px] text-green-600 font-medium">Saved</span>
-                  {/if}
-                </div>
-              {:else}
-                <div class="border border-dashed border-gray-300 rounded-lg p-12 text-center">
-                  <p class="text-[14px] font-medium text-gray-700 mb-1">No context generated yet</p>
-                  <p class="text-[13px] text-gray-400">
-                    {stats.submittedCount > 0
-                      ? `${stats.submittedCount} input(s) ready — click "Generate from Inputs" above`
-                      : 'Waiting for contributors to submit their inputs'}
-                  </p>
-                </div>
-              {/if}
-            {/if}
-
             <!-- TEAMS -->
-            {#if activeTab === 'teams'}
+            {:else if activeTab === 'teams'}
               <div class="space-y-4">
                 <div class="flex items-center justify-between">
                   <div>
