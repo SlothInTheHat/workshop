@@ -37,6 +37,8 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 
 	if (workshop.status === 'live') {
 		redirect(303, `/workshop/${params.id}/live`);
+	} else if (workshop.status === 'completed') {
+		redirect(303, `/workshops/${params.id}/post/contributor`);
 	} else if (workshop.status !== 'pre') {
 		redirect(303, '/workshops');
 	}

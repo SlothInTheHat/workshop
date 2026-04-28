@@ -25,7 +25,11 @@ async function ensureParticipant(db: NonNullable<ReturnType<typeof getDb>>, work
 }
 
 function workshopRedirect(role: 'facilitator' | 'contributor', workshopId: string, status?: string) {
-	if (role === 'contributor') return `/workshops/${workshopId}/contributor`;
+	if (role === 'contributor') {
+		if (status === 'live') return `/workshop/${workshopId}/live`;
+		if (status === 'completed') return `/workshops/${workshopId}/post/contributor`;
+		return `/workshops/${workshopId}/contributor`;
+	}
 	if (status === 'live') return `/workshop/${workshopId}/live`;
 	if (status === 'completed') return `/workshops/${workshopId}/post`;
 	return `/workshops/${workshopId}/pre`;
@@ -187,8 +191,10 @@ export const actions: Actions = {
 					// Ensure the user appears in pre_participants for dashboard lookup
 					await ensureParticipant(db, workshop.id, name, role);
 
-					// Contributors always go to the contributor input form
+					// Route contributors based on workshop status
 					if (role === 'contributor') {
+						if (workshop.status === 'live') redirect(303, `/workshop/${workshop.id}/live`);
+						if (workshop.status === 'completed') redirect(303, `/workshops/${workshop.id}/post/contributor`);
 						redirect(303, `/workshops/${workshop.id}/contributor`);
 					}
 
