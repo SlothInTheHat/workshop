@@ -372,6 +372,14 @@
     }
     launching = false;
   }
+
+  async function copyToClipboard(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  }
 </script>
 
 <svelte:head>
@@ -848,31 +856,35 @@
         <!-- Access Codes -->
         {#if workshop.facilitatorCode || workshop.contributorCode}
           <div class="bg-white rounded-lg border border-gray-200 p-5">
-            <h3 class="text-[13px] text-gray-900 font-semibold mb-3">Access Codes</h3>
-            <p class="text-[11px] text-gray-400 mb-4">Share these codes so participants can join via <span class="font-medium text-gray-600">/join</span></p>
+            <h3 class="text-[13px] text-gray-900 font-semibold mb-3">Access Links</h3>
+            <p class="text-[11px] text-gray-400 mb-4">Share these links with participants to join the workshop</p>
             <div class="space-y-3">
               {#if workshop.facilitatorCode}
                 <div class="bg-blue-50 border border-blue-100 rounded-lg p-3">
-                  <p class="text-[11px] text-blue-600 font-medium mb-1.5">Facilitator Code</p>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="font-mono text-[18px] font-bold text-blue-800 tracking-widest">{workshop.facilitatorCode}</span>
-                    <button
-                      onclick={() => navigator.clipboard.writeText(workshop.facilitatorCode ?? '')}
-                      class="px-2.5 py-1 bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 rounded text-[11px] font-medium transition-colors"
-                    >Copy</button>
+                  <p class="text-[11px] text-blue-600 font-medium mb-1.5">Facilitator Link</p>
+                  <div class="bg-white border border-blue-200 rounded p-2 mb-2 break-all">
+                    <p class="text-[11px] text-blue-800 font-mono">
+                      {typeof window !== 'undefined' ? window.location.origin : ''}/join?code={workshop.facilitatorCode}
+                    </p>
                   </div>
+                  <button
+                    onclick={() => copyToClipboard((typeof window !== 'undefined' ? window.location.origin : '') + '/join?code=' + (workshop.facilitatorCode ?? ''))}
+                    class="w-full px-2.5 py-1.5 bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 rounded text-[11px] font-medium transition-colors"
+                  >Copy Link</button>
                 </div>
               {/if}
               {#if workshop.contributorCode}
                 <div class="bg-[#F0F9F9] border border-[#6B9695]/20 rounded-lg p-3">
-                  <p class="text-[11px] text-[#6B9695] font-medium mb-1.5">Contributor Code</p>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="font-mono text-[18px] font-bold text-[#4A7B7A] tracking-widest">{workshop.contributorCode}</span>
-                    <button
-                      onclick={() => navigator.clipboard.writeText(workshop.contributorCode ?? '')}
-                      class="px-2.5 py-1 bg-white border border-[#6B9695]/30 text-[#6B9695] hover:bg-[#F0F9F9] rounded text-[11px] font-medium transition-colors"
-                    >Copy</button>
+                  <p class="text-[11px] text-[#6B9695] font-medium mb-1.5">Contributor Link</p>
+                  <div class="bg-white border border-[#6B9695]/30 rounded p-2 mb-2 break-all">
+                    <p class="text-[11px] text-[#4A7B7A] font-mono">
+                      {typeof window !== 'undefined' ? window.location.origin : ''}/join?code={workshop.contributorCode}
+                    </p>
                   </div>
+                  <button
+                    onclick={() => copyToClipboard((typeof window !== 'undefined' ? window.location.origin : '') + '/join?code=' + (workshop.contributorCode ?? ''))}
+                    class="w-full px-2.5 py-1.5 bg-white border border-[#6B9695]/30 text-[#6B9695] hover:bg-[#F0F9F9] rounded text-[11px] font-medium transition-colors"
+                  >Copy Link</button>
                 </div>
               {/if}
             </div>
