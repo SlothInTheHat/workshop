@@ -53,7 +53,9 @@
       <div class="flex items-center justify-between mb-6">
         <div>
           <h1 class="text-3xl text-gray-900 mb-2 font-bold">Workshop Mode</h1>
-          <p class="text-[14px] text-gray-600">{workshop?.client ?? 'Loading...'}</p>
+          {#if workshop?.client}
+            <p class="text-[14px] text-gray-600">{workshop.client}</p>
+          {/if}
         </div>
         <div class="flex items-center gap-3">
           <a

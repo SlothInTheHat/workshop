@@ -18,6 +18,7 @@
   let newParticipantName = $state('');
   let newParticipantEmail = $state('');
   let newParticipantRole = $state('contributor');
+  let emailError = $state('');
 
   // Creation state
   let creating = $state(false);
@@ -29,14 +30,25 @@
   let facilitatorCode = $state('');
   let contributorCode = $state('');
 
+  function isValidEmail(email: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+
   function addParticipant() {
     const name = newParticipantName.trim();
     const email = newParticipantEmail.trim();
     if (!name || !email) return;
+
+    if (email && !isValidEmail(email)) {
+      emailError = 'Please enter a valid email address';
+      return;
+    }
+
     participants = [...participants, { name, email, role: newParticipantRole }];
     newParticipantName = '';
     newParticipantEmail = '';
     newParticipantRole = 'contributor';
+    emailError = '';
   }
 
   function removeParticipant(i: number) {
@@ -285,6 +297,7 @@
                 placeholder="Email address"
                 class="col-span-5 px-3 py-2.5 border border-gray-300 rounded-lg text-[14px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#6B9695] focus:border-transparent placeholder:text-gray-400"
                 onkeydown={(e) => { if (e.key === 'Enter') addParticipant(); }}
+                oninput={() => { emailError = ''; }}
               />
               <select
                 bind:value={newParticipantRole}
@@ -301,11 +314,11 @@
                 Add
               </button>
             </div>
-          </div>
 
-          <a href="#" onclick={(e) => { e.preventDefault(); step = 1; }} class="text-[13px] text-gray-500 hover:text-gray-700 underline">
-            Skip for now
-          </a>
+            {#if emailError}
+              <p class="text-[13px] text-red-600 mt-2">{emailError}</p>
+            {/if}
+          </div>
         </div>
 
         {#if createError}
