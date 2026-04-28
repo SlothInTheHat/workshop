@@ -222,7 +222,7 @@
   let editTitle = $state('');
   let editSummary = $state('');
   let editContext = $state('');
-  let editValue = $state<'High' | 'Medium' | 'Low'>('High');
+  let editValue = $state<'High' | 'Medium' | 'Low'>('Medium');
   let editViability = $state<'High' | 'Medium' | 'Low'>('Medium');
   let editVisibility = $state<'Internal' | 'Restricted' | 'Cross-Silo'>('Internal');
   let editProblemStatement = $state('');
@@ -350,7 +350,7 @@
     selectedCardId = null;
     newTitle = '';
     newSummary = '';
-    newValue = 'High';
+    newValue = 'Medium';
     newViability = 'Medium';
     newVisibility = 'Internal';
     // Always start fresh — don't restore previous chat
@@ -516,7 +516,7 @@
   let newTitle = $state('');
   let newSummary = $state('');
   let newContext = $state('');
-  let newValue = $state<'High' | 'Medium' | 'Low'>('High');
+  let newValue = $state<'High' | 'Medium' | 'Low'>('Medium');
   let newViability = $state<'High' | 'Medium' | 'Low'>('Medium');
   let newVisibility = $state<'Internal' | 'Restricted' | 'Cross-Silo'>('Internal');
   let newProblemStatement = $state('');
@@ -705,7 +705,7 @@
         newTitle = '';
         newSummary = '';
         newContext = '';
-        newValue = 'High';
+        newValue = 'Medium';
         newViability = 'Medium';
         newVisibility = 'Internal';
         newProblemStatement = '';
