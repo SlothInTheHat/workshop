@@ -40,9 +40,24 @@ export const GET: RequestHandler = async ({ params }) => {
   if (!workshop) throw error(404, 'Workshop not found');
 
   const workshopTeams = getWorkshopTeams(params.workshopId);
-  const workshopParticipants = getWorkshopParticipants(params.workshopId);
   const useCaseCount = getWorkshopUseCases(params.workshopId).length;
 
+  // Augment memberIds and participants from live_participants DB if available
+  if (db) {
+    try {
+      const liveParticipants = await db.select().from(schema.liveParticipants)
+        .where(eq(schema.liveParticipants.workshopId, params.workshopId));
+      const teamsWithMembers = workshopTeams.map(t => ({
+        ...t,
+        memberIds: liveParticipants.filter(p => p.teamId === t.id).map(p => p.id),
+      }));
+      return json({ workshop, teams: teamsWithMembers, participants: liveParticipants, useCaseCount });
+    } catch {
+      // fall through to pure in-memory
+    }
+  }
+
+  const workshopParticipants = getWorkshopParticipants(params.workshopId);
   return json({ workshop, teams: workshopTeams, participants: workshopParticipants, useCaseCount });
 };
 

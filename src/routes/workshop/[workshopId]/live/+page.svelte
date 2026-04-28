@@ -487,7 +487,14 @@
       console.log('[JOIN TEAM] Success:', participant);
       me = participant;
 
-      // Refresh participants list
+      // Optimistically update teams so teamForParticipant works immediately
+      teams = teams.map(t =>
+        t.id === teamId
+          ? { ...t, memberIds: [...(t.memberIds ?? []).filter((id: string) => id !== participant.id), participant.id] }
+          : t
+      );
+
+      // Refresh from server to get authoritative state
       const r = await fetch(`/api/workshop/${workshopId}`);
       if (r.ok) {
         const overview = await r.json();

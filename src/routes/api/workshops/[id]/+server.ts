@@ -128,18 +128,43 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 				});
 				console.log('[Launch] Pre-workshop data copied to live workshop');
 
-				// Create teams in live workshop from pre-workshop config
-				const preTeams = w.teams ?? [];
-				if (preTeams.length > 0) {
-					for (const team of preTeams) {
+				// Ensure a live workshops record exists for the overview API
+				try {
+					await db.insert(schema.workshops).values({
+						id: params.id,
+						title: w.title,
+						client: w.tenantId ?? 'default',
+						status: 'setup',
+						joinCode: w.facilitatorCode ?? params.id,
+						createdAt: new Date(),
+					});
+				} catch {
+					// Already exists — update status
+					await db.update(schema.workshops)
+						.set({ status: 'setup' })
+						.where(eq(schema.workshops.id, params.id));
+				}
+
+				// Create teams in DB (persists across serverless instances)
+				const preTeams = (w.teams ?? []) as { name: string }[];
+				const teamsToCreate = preTeams.length > 0 ? preTeams : [{ name: 'Team A' }, { name: 'Team B' }];
+
+				for (const team of teamsToCreate) {
+					const teamId = crypto.randomUUID();
+					try {
+						await db.insert(schema.breakoutTeams).values({
+							id: teamId,
+							workshopId: params.id,
+							name: team.name,
+							memberIds: [],
+							createdAt: new Date(),
+						});
+						// Also create in memory for SSE broadcast
 						createTeam(params.id, team.name, []);
-						console.log('[Launch] Created team:', team.name);
+					} catch {
+						// team may already exist
 					}
-				} else {
-					// Default teams if none configured
-					createTeam(params.id, 'Team A', []);
-					createTeam(params.id, 'Team B', []);
-					console.log('[Launch] Created default teams');
+					console.log('[Launch] Created team in DB:', team.name);
 				}
 			}
 		} catch (err) {
