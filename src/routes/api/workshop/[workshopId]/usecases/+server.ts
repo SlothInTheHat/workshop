@@ -3,12 +3,11 @@ import type { RequestHandler } from './$types';
 import { randomUUID } from 'crypto';
 import { db, isDatabaseEnabled } from '$lib/db/index.js';
 import { workshops, teams, participants, getWorkshopUseCases, createUseCase } from '$lib/workshop/store.js';
-import type { RatingLevel, Visibility } from '$lib/workshop/types.js';
+import type { RatingLevel } from '$lib/workshop/types.js';
 import * as schema from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 
 const VALID_RATINGS: RatingLevel[] = ['High', 'Medium', 'Low'];
-const VALID_VISIBILITY: Visibility[] = ['Internal', 'Restricted', 'Cross-Silo'];
 
 // GET /api/workshop/:workshopId/usecases?teamId=...
 export const GET: RequestHandler = async ({ params, url }) => {
@@ -42,13 +41,12 @@ export const POST: RequestHandler = async ({ params, request }) => {
   const body = await request.json().catch(() => null);
   if (!body) throw error(400, 'Invalid JSON body');
 
-  const { title, summary, value, viability, visibility, teamId, participantId, position, collaborators, context, pillarTags, problemStatement, solutionOverview, businessUnits, timeline, costs, legalCompliance } = body;
+  const { title, summary, value, viability, teamId, participantId, position, collaborators, context, pillarTags, problemStatement, solutionOverview, businessUnits, timeline, costs, legalCompliance } = body;
 
   if (!title || typeof title !== 'string') throw error(400, 'title is required');
   if (!summary || typeof summary !== 'string') throw error(400, 'summary is required');
   if (!VALID_RATINGS.includes(value)) throw error(400, 'value must be High, Medium, or Low');
   if (!VALID_RATINGS.includes(viability)) throw error(400, 'viability must be High, Medium, or Low');
-  if (!VALID_VISIBILITY.includes(visibility)) throw error(400, 'visibility must be Internal, Restricted, or Cross-Silo');
 
   if (isDatabaseEnabled && db) {
     // Validate workshop, team, and participant exist
@@ -85,7 +83,6 @@ export const POST: RequestHandler = async ({ params, request }) => {
         context: context ?? '',
         value,
         viability,
-        visibility,
         addedBy: participant.name,
         upvotes: 0,
         upvotedBy: [],
@@ -107,10 +104,9 @@ export const POST: RequestHandler = async ({ params, request }) => {
         summary: summary.trim(),
         value,
         viability,
-        visibility,
         addedBy: participant.name,
         upvotes: 0,
-        tags: [value, viability, visibility],
+        tags: [value, viability],
       })
       .returning();
 
@@ -154,7 +150,6 @@ export const POST: RequestHandler = async ({ params, request }) => {
       summary: summary.trim(),
       value,
       viability,
-      visibility,
       addedBy: participant.name,
       participantId,
       position: position && typeof position.x === 'number' ? position : undefined,

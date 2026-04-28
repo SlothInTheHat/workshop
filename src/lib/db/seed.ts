@@ -71,15 +71,15 @@ async function seed() {
 
   // Use cases with paired insights
   const useCaseData = [
-    { teamId: teamAId, participantId: pSarahId, title: 'Intake Form Auto-Fill', summary: 'Use AI to pre-populate intake forms from referral documents, reducing manual entry.', value: 'High', viability: 'High', visibility: 'Internal', addedBy: 'Dr. Sarah Chen', px: 80, py: 60 },
-    { teamId: teamAId, participantId: pSarahId, title: 'Insurance Verification Bot', summary: 'Automate real-time insurance eligibility checks at point of scheduling.', value: 'High', viability: 'Medium', visibility: 'Internal', addedBy: 'Dr. Sarah Chen', px: 320, py: 60 },
-    { teamId: teamAId, participantId: pSarahId, title: 'Duplicate Record Detector', summary: 'ML model to flag potential duplicate patient records across EHR systems.', value: 'Medium', viability: 'Medium', visibility: 'Cross-Silo', addedBy: 'Dr. Sarah Chen', px: 80, py: 300 },
-    { teamId: teamAId, participantId: pSarahId, title: 'Fax-to-Referral Extraction', summary: 'OCR + NLP pipeline to convert incoming faxes into structured referral records.', value: 'High', viability: 'High', visibility: 'Internal', addedBy: 'Dr. Sarah Chen', px: 320, py: 300 },
-    { teamId: teamAId, participantId: pSarahId, title: 'EHR Data Sync Monitor', summary: 'Real-time alerting when EHR sync jobs fail or produce inconsistent records.', value: 'Medium', viability: 'High', visibility: 'Internal', addedBy: 'Dr. Sarah Chen', px: 560, py: 60 },
-    { teamId: teamBId, participantId: pSarahId, title: 'Referral Status Tracker', summary: 'Automated outbound status updates to referring physicians via portal or SMS.', value: 'High', viability: 'Medium', visibility: 'Restricted', addedBy: 'Dr. Sarah Chen', px: 80, py: 60 },
-    { teamId: teamBId, participantId: pSarahId, title: 'Smart Scheduling Assistant', summary: 'AI that resolves scheduling conflicts and optimises appointment slots.', value: 'High', viability: 'Low', visibility: 'Internal', addedBy: 'Dr. Sarah Chen', px: 320, py: 60 },
-    { teamId: teamBId, participantId: pSarahId, title: 'Care Gap Identification', summary: 'Predictive model to surface patients overdue for follow-up or preventive care.', value: 'High', viability: 'Medium', visibility: 'Cross-Silo', addedBy: 'Dr. Sarah Chen', px: 80, py: 300 },
-    { teamId: teamBId, participantId: pSarahId, title: 'Clinical Notes Summariser', summary: 'LLM summarisation of lengthy clinical notes into concise SOAP-format briefs.', value: 'Medium', viability: 'High', visibility: 'Restricted', addedBy: 'Dr. Sarah Chen', px: 320, py: 300 },
+    { teamId: teamAId, participantId: pSarahId, title: 'Intake Form Auto-Fill', summary: 'Use AI to pre-populate intake forms from referral documents, reducing manual entry.', value: 'High', viability: 'High', addedBy: 'Dr. Sarah Chen', px: 80, py: 60 },
+    { teamId: teamAId, participantId: pSarahId, title: 'Insurance Verification Bot', summary: 'Automate real-time insurance eligibility checks at point of scheduling.', value: 'High', viability: 'Medium', addedBy: 'Dr. Sarah Chen', px: 320, py: 60 },
+    { teamId: teamAId, participantId: pSarahId, title: 'Duplicate Record Detector', summary: 'ML model to flag potential duplicate patient records across EHR systems.', value: 'Medium', viability: 'Medium', addedBy: 'Dr. Sarah Chen', px: 80, py: 300 },
+    { teamId: teamAId, participantId: pSarahId, title: 'Fax-to-Referral Extraction', summary: 'OCR + NLP pipeline to convert incoming faxes into structured referral records.', value: 'High', viability: 'High', addedBy: 'Dr. Sarah Chen', px: 320, py: 300 },
+    { teamId: teamAId, participantId: pSarahId, title: 'EHR Data Sync Monitor', summary: 'Real-time alerting when EHR sync jobs fail or produce inconsistent records.', value: 'Medium', viability: 'High', addedBy: 'Dr. Sarah Chen', px: 560, py: 60 },
+    { teamId: teamBId, participantId: pSarahId, title: 'Referral Status Tracker', summary: 'Automated outbound status updates to referring physicians via portal or SMS.', value: 'High', viability: 'Medium', addedBy: 'Dr. Sarah Chen', px: 80, py: 60 },
+    { teamId: teamBId, participantId: pSarahId, title: 'Smart Scheduling Assistant', summary: 'AI that resolves scheduling conflicts and optimises appointment slots.', value: 'High', viability: 'Low', addedBy: 'Dr. Sarah Chen', px: 320, py: 60 },
+    { teamId: teamBId, participantId: pSarahId, title: 'Care Gap Identification', summary: 'Predictive model to surface patients overdue for follow-up or preventive care.', value: 'High', viability: 'Medium', addedBy: 'Dr. Sarah Chen', px: 80, py: 300 },
+    { teamId: teamBId, participantId: pSarahId, title: 'Clinical Notes Summariser', summary: 'LLM summarisation of lengthy clinical notes into concise SOAP-format briefs.', value: 'Medium', viability: 'High', addedBy: 'Dr. Sarah Chen', px: 320, py: 300 },
   ];
 
   for (const uc of useCaseData) {
@@ -95,9 +95,8 @@ async function seed() {
       summary: uc.summary,
       value: uc.value,
       viability: uc.viability,
-      visibility: uc.visibility,
       addedBy: uc.addedBy,
-      tags: [uc.value, uc.viability, uc.visibility],
+      tags: [uc.value, uc.viability],
     });
 
     await db.insert(schema.useCases).values({
@@ -109,7 +108,6 @@ async function seed() {
       summary: uc.summary,
       value: uc.value,
       viability: uc.viability,
-      visibility: uc.visibility,
       addedBy: uc.addedBy,
       positionX: uc.px,
       positionY: uc.py,

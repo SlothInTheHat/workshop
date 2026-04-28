@@ -1,6 +1,5 @@
 export type WorkshopStatus = 'setup' | 'live' | 'summary';
 export type RatingLevel = 'High' | 'Medium' | 'Low';
-export type Visibility = 'Internal' | 'Restricted' | 'Cross-Silo';
 export type Presence = 'in-room' | 'remote';
 
 export interface AgendaItem {
@@ -68,7 +67,6 @@ export interface UseCase {
   summary: string;
   value: RatingLevel;
   viability: RatingLevel;
-  visibility: Visibility;
   addedBy: string;
   participantId: string;
   createdAt: string;
@@ -100,7 +98,6 @@ export interface Insight {
   summary: string;
   value: RatingLevel;
   viability: RatingLevel;
-  visibility: Visibility;
   addedBy: string;
   createdAt: string;
   upvotes: number;

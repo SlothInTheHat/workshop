@@ -260,7 +260,6 @@ export function createUseCase(input: {
   summary: string;
   value: UseCase['value'];
   viability: UseCase['viability'];
-  visibility: UseCase['visibility'];
   addedBy: string;
   participantId: string;
   position?: { x: number; y: number };
@@ -286,7 +285,6 @@ export function createUseCase(input: {
     summary: input.summary,
     value: input.value,
     viability: input.viability,
-    visibility: input.visibility,
     addedBy: input.addedBy,
     participantId: input.participantId,
     createdAt: now,
@@ -334,11 +332,10 @@ export function createUseCase(input: {
     summary: input.summary,
     value: input.value,
     viability: input.viability,
-    visibility: input.visibility,
     addedBy: input.addedBy,
     createdAt: now,
     upvotes: 0,
-    tags: [input.value, input.viability, input.visibility],
+    tags: [input.value, input.viability],
   };
   insights.set(insightId, insight);
 
@@ -349,7 +346,7 @@ export function createUseCase(input: {
 
 export function updateUseCase(
   useCaseId: string,
-  patch: Partial<Pick<UseCase, 'title' | 'summary' | 'value' | 'viability' | 'visibility' | 'position' | 'clusterId' | 'collaborators' | 'context' | 'pillarTags' | 'problemStatement' | 'solutionOverview' | 'businessUnits' | 'timeline' | 'costs' | 'legalCompliance'>>
+  patch: Partial<Pick<UseCase, 'title' | 'summary' | 'value' | 'viability' | 'position' | 'clusterId' | 'collaborators' | 'context' | 'pillarTags' | 'problemStatement' | 'solutionOverview' | 'businessUnits' | 'timeline' | 'costs' | 'legalCompliance'>>
 ): UseCase | null {
   const uc = useCases.get(useCaseId);
   if (!uc) return null;
@@ -365,8 +362,7 @@ export function updateUseCase(
       summary: updated.summary,
       value: updated.value,
       viability: updated.viability,
-      visibility: updated.visibility,
-      tags: [updated.value, updated.viability, updated.visibility],
+      tags: [updated.value, updated.viability],
     });
   }
 
@@ -614,15 +610,15 @@ function seed(): void {
   const teamB = createTeam(workshopId, 'Team B', []);
 
   const seedCases: Array<Parameters<typeof createUseCase>[0]> = [
-    { workshopId, teamId: teamA.id, title: 'Intake Form Auto-Fill', summary: 'Use AI to pre-populate intake forms from referral documents, reducing manual entry.', value: 'High', viability: 'High', visibility: 'Internal', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 80, y: 60 }, collaborators: [pSarah.name] },
-    { workshopId, teamId: teamA.id, title: 'Insurance Verification Bot', summary: 'Automate real-time insurance eligibility checks at point of scheduling.', value: 'High', viability: 'Medium', visibility: 'Internal', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 320, y: 60 } },
-    { workshopId, teamId: teamA.id, title: 'Duplicate Record Detector', summary: 'ML model to flag potential duplicate patient records across EHR systems.', value: 'Medium', viability: 'Medium', visibility: 'Cross-Silo', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 80, y: 300 } },
-    { workshopId, teamId: teamA.id, title: 'Fax-to-Referral Extraction', summary: 'OCR + NLP pipeline to convert incoming faxes into structured referral records.', value: 'High', viability: 'High', visibility: 'Internal', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 320, y: 300 } },
-    { workshopId, teamId: teamA.id, title: 'EHR Data Sync Monitor', summary: 'Real-time alerting when EHR sync jobs fail or produce inconsistent records.', value: 'Medium', viability: 'High', visibility: 'Internal', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 560, y: 60 } },
-    { workshopId, teamId: teamB.id, title: 'Referral Status Tracker', summary: 'Automated outbound status updates to referring physicians via portal or SMS.', value: 'High', viability: 'Medium', visibility: 'Restricted', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 80, y: 60 } },
-    { workshopId, teamId: teamB.id, title: 'Smart Scheduling Assistant', summary: 'AI that resolves scheduling conflicts and optimises appointment slots.', value: 'High', viability: 'Low', visibility: 'Internal', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 320, y: 60 } },
-    { workshopId, teamId: teamB.id, title: 'Care Gap Identification', summary: 'Predictive model to surface patients overdue for follow-up or preventive care.', value: 'High', viability: 'Medium', visibility: 'Cross-Silo', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 80, y: 300 } },
-    { workshopId, teamId: teamB.id, title: 'Clinical Notes Summariser', summary: 'LLM summarisation of lengthy clinical notes into concise SOAP-format briefs.', value: 'Medium', viability: 'High', visibility: 'Restricted', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 320, y: 300 } },
+    { workshopId, teamId: teamA.id, title: 'Intake Form Auto-Fill', summary: 'Use AI to pre-populate intake forms from referral documents, reducing manual entry.', value: 'High', viability: 'High', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 80, y: 60 }, collaborators: [pSarah.name] },
+    { workshopId, teamId: teamA.id, title: 'Insurance Verification Bot', summary: 'Automate real-time insurance eligibility checks at point of scheduling.', value: 'High', viability: 'Medium', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 320, y: 60 } },
+    { workshopId, teamId: teamA.id, title: 'Duplicate Record Detector', summary: 'ML model to flag potential duplicate patient records across EHR systems.', value: 'Medium', viability: 'Medium', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 80, y: 300 } },
+    { workshopId, teamId: teamA.id, title: 'Fax-to-Referral Extraction', summary: 'OCR + NLP pipeline to convert incoming faxes into structured referral records.', value: 'High', viability: 'High', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 320, y: 300 } },
+    { workshopId, teamId: teamA.id, title: 'EHR Data Sync Monitor', summary: 'Real-time alerting when EHR sync jobs fail or produce inconsistent records.', value: 'Medium', viability: 'High', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 560, y: 60 } },
+    { workshopId, teamId: teamB.id, title: 'Referral Status Tracker', summary: 'Automated outbound status updates to referring physicians via portal or SMS.', value: 'High', viability: 'Medium', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 80, y: 60 } },
+    { workshopId, teamId: teamB.id, title: 'Smart Scheduling Assistant', summary: 'AI that resolves scheduling conflicts and optimises appointment slots.', value: 'High', viability: 'Low', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 320, y: 60 } },
+    { workshopId, teamId: teamB.id, title: 'Care Gap Identification', summary: 'Predictive model to surface patients overdue for follow-up or preventive care.', value: 'High', viability: 'Medium', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 80, y: 300 } },
+    { workshopId, teamId: teamB.id, title: 'Clinical Notes Summariser', summary: 'LLM summarisation of lengthy clinical notes into concise SOAP-format briefs.', value: 'Medium', viability: 'High', addedBy: pSarah.name, participantId: pSarah.id, position: { x: 320, y: 300 } },
   ];
 
   for (const uc of seedCases) {

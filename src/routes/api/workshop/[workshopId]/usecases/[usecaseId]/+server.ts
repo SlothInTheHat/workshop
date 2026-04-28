@@ -2,12 +2,11 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db, isDatabaseEnabled } from '$lib/db/index.js';
 import { useCases, updateUseCase, deleteUseCase } from '$lib/workshop/store.js';
-import type { RatingLevel, Visibility } from '$lib/workshop/types.js';
+import type { RatingLevel } from '$lib/workshop/types.js';
 import * as schema from '$lib/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 const VALID_RATINGS: RatingLevel[] = ['High', 'Medium', 'Low'];
-const VALID_VISIBILITY: Visibility[] = ['Internal', 'Restricted', 'Cross-Silo'];
 
 function assertUseCaseBelongsToWorkshop(useCaseId: string, workshopId: string) {
   const uc = useCases.get(useCaseId);
@@ -47,7 +46,6 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
     if (typeof body.context === 'string') patch.context = body.context.trim();
     if (VALID_RATINGS.includes(body.value)) patch.value = body.value;
     if (VALID_RATINGS.includes(body.viability)) patch.viability = body.viability;
-    if (VALID_VISIBILITY.includes(body.visibility)) patch.visibility = body.visibility;
     if (body.position && typeof body.position.x === 'number') patch.position = body.position;
     if (typeof body.clusterId === 'number') patch.clusterId = body.clusterId;
     if (Array.isArray(body.collaborators)) patch.collaborators = body.collaborators;
@@ -67,21 +65,19 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
       .where(eq(schema.useCases.id, params.usecaseId))
       .returning();
 
-    // Update corresponding insight if title/summary/value/viability/visibility changed
-    if (patch.title || patch.summary || patch.value || patch.viability || patch.visibility) {
+    // Update corresponding insight if title/summary/value/viability changed
+    if (patch.title || patch.summary || patch.value || patch.viability) {
       const insightPatch: Record<string, unknown> = {};
       if (patch.title) insightPatch.title = patch.title;
       if (patch.summary) insightPatch.summary = patch.summary;
       if (patch.value) insightPatch.value = patch.value;
       if (patch.viability) insightPatch.viability = patch.viability;
-      if (patch.visibility) insightPatch.visibility = patch.visibility;
 
-      // Update tags if value/viability/visibility changed
-      if (patch.value || patch.viability || patch.visibility) {
+      // Update tags if value/viability changed
+      if (patch.value || patch.viability) {
         insightPatch.tags = [
           patch.value ?? updated.value,
           patch.viability ?? updated.viability,
-          patch.visibility ?? updated.visibility,
         ];
       }
 
@@ -101,7 +97,6 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
     if (typeof body.context === 'string') patch.context = body.context.trim();
     if (VALID_RATINGS.includes(body.value)) patch.value = body.value;
     if (VALID_RATINGS.includes(body.viability)) patch.viability = body.viability;
-    if (VALID_VISIBILITY.includes(body.visibility)) patch.visibility = body.visibility;
     if (body.position && typeof body.position.x === 'number') patch.position = body.position;
     if (typeof body.clusterId === 'number') patch.clusterId = body.clusterId;
     if (Array.isArray(body.collaborators)) patch.collaborators = body.collaborators;

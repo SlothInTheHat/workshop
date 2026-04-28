@@ -224,7 +224,6 @@
   let editContext = $state('');
   let editValue = $state<'High' | 'Medium' | 'Low'>('Medium');
   let editViability = $state<'High' | 'Medium' | 'Low'>('Medium');
-  let editVisibility = $state<'Internal' | 'Restricted' | 'Cross-Silo'>('Internal');
   let editProblemStatement = $state('');
   let editSolutionOverview = $state('');
   let editBusinessUnits = $state('');
@@ -352,7 +351,6 @@
     newSummary = '';
     newValue = 'Medium';
     newViability = 'Medium';
-    newVisibility = 'Internal';
     // Always start fresh — don't restore previous chat
     sessionStore['new'] = { messages: [], preview: null };
     try { localStorage.removeItem(chatStorageKey('new')); } catch {}
@@ -370,7 +368,6 @@
     editContext = card.context ?? '';
     editValue = card.value;
     editViability = card.viability;
-    editVisibility = card.visibility;
     editProblemStatement = (card as any).problemStatement ?? '';
     editSolutionOverview = (card as any).solutionOverview ?? '';
     editBusinessUnits = ((card as any).businessUnits ?? []).join(', ');
@@ -414,7 +411,6 @@
           context: editContext.trim(),
           value: editValue,
           viability: editViability,
-          visibility: editVisibility,
           problemStatement: editProblemStatement.trim() || undefined,
           solutionOverview: editSolutionOverview.trim() || undefined,
           businessUnits: editBusinessUnits.trim() ? editBusinessUnits.split(',').map(s => s.trim()).filter(Boolean) : undefined,
@@ -518,7 +514,6 @@
   let newContext = $state('');
   let newValue = $state<'High' | 'Medium' | 'Low'>('Medium');
   let newViability = $state<'High' | 'Medium' | 'Low'>('Medium');
-  let newVisibility = $state<'Internal' | 'Restricted' | 'Cross-Silo'>('Internal');
   let newProblemStatement = $state('');
   let newSolutionOverview = $state('');
   let newBusinessUnits = $state('');
@@ -683,7 +678,6 @@
           context: newContext.trim(),
           value: newValue,
           viability: newViability,
-          visibility: newVisibility,
           teamId: myTeam.id,
           participantId: me.id,
           position: pos,
@@ -707,7 +701,6 @@
         newContext = '';
         newValue = 'Medium';
         newViability = 'Medium';
-        newVisibility = 'Internal';
         newProblemStatement = '';
         newSolutionOverview = '';
         newBusinessUnits = '';
@@ -770,11 +763,6 @@
   const viabilityColor = (v: string) =>
     v === 'High' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
     v === 'Medium' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-    'bg-gray-50 text-gray-600 border-gray-200';
-
-  const visibilityColor = (v: string) =>
-    v === 'Restricted' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-    v === 'Cross-Silo' ? 'bg-purple-50 text-purple-700 border-purple-200' :
     'bg-gray-50 text-gray-600 border-gray-200';
 
   // ── Complete Workshop ─────────────────────────────────────────────────────────
@@ -1220,7 +1208,6 @@
               <div class="flex flex-wrap gap-1.5 mb-2.5">
                 <span class="px-2 py-0.5 rounded-md text-[10px] border font-medium {valueColor(card.value)}">Value: {card.value}</span>
                 <span class="px-2 py-0.5 rounded-md text-[10px] border font-medium {viabilityColor(card.viability)}">Viability: {card.viability}</span>
-                <span class="px-2 py-0.5 rounded-md text-[10px] border font-medium {visibilityColor(card.visibility)}">{card.visibility}</span>
               </div>
 
               <!-- Interaction bar -->
@@ -1435,12 +1422,6 @@
               <label for="uc-viability" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Viability</label>
               <select id="uc-viability" bind:value={newViability} class="w-full px-2.5 py-2 border border-gray-200 rounded-lg text-[12px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9]">
                 <option>High</option><option>Medium</option><option>Low</option>
-              </select>
-            </div>
-            <div>
-              <label for="uc-visibility" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Visibility</label>
-              <select id="uc-visibility" bind:value={newVisibility} class="w-full px-2.5 py-2 border border-gray-200 rounded-lg text-[12px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9]">
-                <option>Internal</option><option>Restricted</option><option>Cross-Silo</option>
               </select>
             </div>
           </div>
@@ -1666,13 +1647,6 @@
             <select id="edit-viability" bind:value={editViability}
               class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9]">
               <option>High</option><option>Medium</option><option>Low</option>
-            </select>
-          </div>
-          <div>
-            <label for="edit-visibility" class="block text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Visibility</label>
-            <select id="edit-visibility" bind:value={editVisibility}
-              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-[#FAFAF9]">
-              <option>Internal</option><option>Restricted</option><option>Cross-Silo</option>
             </select>
           </div>
         </div>
