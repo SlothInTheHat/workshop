@@ -2,7 +2,27 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { getSession, setSession, getAccessCodes, clearSession } from '$lib/session';
 import { getDb, schema } from '$lib/db/index';
-import { or, eq } from 'drizzle-orm';
+import { or, eq, and } from 'drizzle-orm';
+
+async function ensureParticipant(db: NonNullable<ReturnType<typeof getDb>>, workshopId: string, name: string, role: string) {
+	try {
+		const existing = await db.select().from(schema.preParticipants)
+			.where(and(eq(schema.preParticipants.workshopId, workshopId), eq(schema.preParticipants.name, name)));
+		if (existing.length === 0) {
+			await db.insert(schema.preParticipants).values({
+				id: crypto.randomUUID(),
+				workshopId,
+				tenantId: 'default',
+				name,
+				role,
+				status: 'pending',
+				createdAt: new Date(),
+			});
+		}
+	} catch (err) {
+		console.warn('[JOIN] Failed to upsert pre_participant:', err);
+	}
+}
 
 function workshopRedirect(role: 'facilitator' | 'contributor', workshopId: string, status?: string) {
 	if (role === 'contributor') return `/workshops/${workshopId}/contributor`;
@@ -163,6 +183,9 @@ export const actions: Actions = {
 
 					// Set session with workshopId
 					setSession(cookies, name, role, workshop.id);
+
+					// Ensure the user appears in pre_participants for dashboard lookup
+					await ensureParticipant(db, workshop.id, name, role);
 
 					// Contributors always go to the contributor input form
 					if (role === 'contributor') {
