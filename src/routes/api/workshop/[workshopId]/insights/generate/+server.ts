@@ -267,4 +267,5 @@ export const POST: RequestHandler = async ({ params }) => {
   broadcast(params.workshopId, 'insight_generated', { clusters, count: generatedInsights.length });
 
   return json({ clusters, insights: generatedInsights });
+  }
 };
