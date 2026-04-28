@@ -4,7 +4,7 @@ import { getSession } from '$lib/session';
 import { participants } from '$lib/workshop/store.js';
 import { getDb } from '$lib/db/index.js';
 import * as schema from '$lib/db/schema.js';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ fetch, params, cookies }) => {
   const session = getSession(cookies);
@@ -23,40 +23,39 @@ export const load: PageServerLoad = async ({ fetch, params, cookies }) => {
   const db = getDb();
   let me = null;
 
-  // Check in-memory store first (for seed data)
-  me = Array.from(participants.values()).find(p =>
-    p.workshopId === workshopId && p.name === session?.name
-  ) ?? null;
-
-  // If not found, check database
-  if (!me && db && session?.name) {
+  // Check DB live_participants first (persistent across serverless instances)
+  if (db && session?.name) {
     try {
-      const dbParts = await db.select()
-        .from(schema.preParticipants)
-        .where(eq(schema.preParticipants.workshopId, workshopId));
-      const found = dbParts.find(p => p.name === session.name);
-      if (found) {
-        const foundInitials = found.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
-        const foundColors = ['bg-blue-400', 'bg-green-400', 'bg-purple-400', 'bg-pink-400', 'bg-yellow-400', 'bg-red-400'];
+      const rows = await db.select().from(schema.liveParticipants)
+        .where(and(
+          eq(schema.liveParticipants.workshopId, workshopId),
+          eq(schema.liveParticipants.name, session.name)
+        ));
+      if (rows.length > 0) {
+        const p = rows[0];
         me = {
-          id: found.id,
-          name: found.name,
+          id: p.id,
+          name: p.name,
           workshopId,
-          teamId: undefined,
+          teamId: p.teamId ?? undefined,
           presence: 'remote' as const,
-          role: found.role,
-          initials: foundInitials,
-          color: foundColors[found.name.length % foundColors.length],
+          role: p.role,
+          initials: p.initials,
+          color: p.color,
         };
       }
     } catch (err) {
-      console.warn('[Live] DB participant lookup failed:', err);
+      console.warn('[Live] DB live_participants lookup failed:', err);
     }
   }
 
-  const needsTeamSelection = !me?.teamId;
+  // Fall back to in-memory store (seeded data / no DB)
+  if (!me) {
+    me = Array.from(participants.values()).find(p =>
+      p.workshopId === workshopId && p.name === session?.name
+    ) ?? null;
+  }
 
-  // Generate initials and color from name
   const initials = session.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   const colors = ['bg-blue-400', 'bg-green-400', 'bg-purple-400', 'bg-pink-400', 'bg-yellow-400', 'bg-red-400'];
   const color = colors[session.name.length % colors.length];
@@ -67,7 +66,7 @@ export const load: PageServerLoad = async ({ fetch, params, cookies }) => {
     participants: overview.participants ?? [],
     usecases,
     me,
-    needsTeamSelection,
+    needsTeamSelection: !me?.teamId,
     currentUser: {
       id: me?.id ?? crypto.randomUUID(),
       name: session.name,

@@ -2,64 +2,108 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { workshops, teams, participants, createParticipant } from '$lib/workshop/store.js';
 import { getDb } from '$lib/db/index.js';
+import * as schema from '$lib/db/schema.js';
+import { eq, and } from 'drizzle-orm';
 
 export const POST: RequestHandler = async ({ params, request }) => {
   const { workshopId } = params;
   const db = getDb();
-  const workshopExists = workshops.has(workshopId) || (db ? true : false);
-
-  if (!workshopExists) throw error(404, 'Workshop not found');
 
   const body = await request.json().catch(() => null);
   if (!body) throw error(400, 'Invalid request body');
 
   const { teamId, name, initials, color, role } = body;
+  if (!teamId || !name) throw error(400, 'teamId and name are required');
 
-  const teamExists = teams.has(teamId) || (db ? true : false);
-  if (!teamId || !teamExists) throw error(400, 'Valid teamId is required');
-  if (!name) throw error(400, 'Name is required');
+  const derivedInitials = initials ?? name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+  const derivedColor = color ?? 'bg-blue-400';
+  const derivedRole = role ?? 'contributor';
 
-  const team = teams.get(teamId);
-  if (team && team.workshopId !== workshopId) throw error(400, 'Team does not belong to this workshop');
+  // DB-backed path (Vercel / production)
+  if (db) {
+    try {
+      // Check if participant already exists
+      const existing = await db.select().from(schema.liveParticipants)
+        .where(and(
+          eq(schema.liveParticipants.workshopId, workshopId),
+          eq(schema.liveParticipants.name, name)
+        ));
 
-  // Check if participant already exists by name
+      let participant;
+
+      if (existing.length > 0) {
+        // Update team assignment
+        const [updated] = await db.update(schema.liveParticipants)
+          .set({ teamId })
+          .where(eq(schema.liveParticipants.id, existing[0].id))
+          .returning();
+        participant = updated;
+      } else {
+        const id = 'p-' + Date.now() + '-' + Math.random().toString(36).substring(7);
+        const [created] = await db.insert(schema.liveParticipants).values({
+          id,
+          workshopId,
+          name,
+          role: derivedRole,
+          initials: derivedInitials,
+          color: derivedColor,
+          teamId,
+        }).returning();
+        participant = created;
+      }
+
+      // Update team memberIds in DB
+      const teamRows = await db.select().from(schema.breakoutTeams)
+        .where(eq(schema.breakoutTeams.id, teamId));
+
+      if (teamRows.length > 0) {
+        const currentMembers: string[] = (teamRows[0].memberIds as string[]) ?? [];
+        if (!currentMembers.includes(participant.id)) {
+          await db.update(schema.breakoutTeams)
+            .set({ memberIds: [...currentMembers, participant.id] })
+            .where(eq(schema.breakoutTeams.id, teamId));
+        }
+      }
+
+      return json(participant, { status: 201 });
+    } catch (err) {
+      console.error('[JOIN] DB error:', err);
+      // Fall through to in-memory
+    }
+  }
+
+  // In-memory fallback
+  const workshopExists = workshops.has(workshopId);
+  if (!workshopExists) throw error(404, 'Workshop not found');
+
   const existing = Array.from(participants.values()).find(
     p => p.workshopId === workshopId && p.name === name
   );
 
   if (existing) {
-    console.log('[JOIN] Participant exists, updating team:', existing.id, 'to', teamId);
-    // Update team if changed
     if (existing.teamId !== teamId) {
       participants.set(existing.id, { ...existing, teamId });
-      // Update old team memberIds
       for (const [, t] of teams) {
         if (t.workshopId === workshopId && t.memberIds.includes(existing.id)) {
           teams.set(t.id, { ...t, memberIds: t.memberIds.filter(id => id !== existing.id) });
         }
       }
-      // Add to new team
-      if (team) {
-        teams.set(teamId, { ...team, memberIds: [...team.memberIds.filter(id => id !== existing.id), existing.id] });
-      }
+      const team = teams.get(teamId);
+      if (team) teams.set(teamId, { ...team, memberIds: [...team.memberIds.filter(id => id !== existing.id), existing.id] });
     }
     return json(participants.get(existing.id));
   }
 
-  // Create new participant
   const participantId = 'p-' + Date.now() + '-' + Math.random().toString(36).substring(7);
-  console.log('[JOIN] Creating new participant:', participantId, name, 'for team', teamId);
-
   const participant = createParticipant({
     id: participantId,
     workshopId,
     name,
-    role: role ?? 'contributor',
-    initials: initials ?? name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2),
-    color: color ?? 'bg-blue-400',
+    role: derivedRole,
+    initials: derivedInitials,
+    color: derivedColor,
     teamId,
   });
 
-  console.log('[JOIN] Participant created:', participant);
   return json(participant, { status: 201 });
 };

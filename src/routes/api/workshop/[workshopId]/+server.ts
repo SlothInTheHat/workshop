@@ -17,14 +17,11 @@ export const GET: RequestHandler = async ({ params }) => {
     });
 
     if (workshop) {
-      const workshopTeams = await db.query.teams.findMany({
-        where: eq(schema.teams.workshopId, params.workshopId),
-        limit: 2,
-      });
+      const workshopTeams = await db.select().from(schema.breakoutTeams)
+        .where(eq(schema.breakoutTeams.workshopId, params.workshopId));
 
-      const workshopParticipants = await db.query.participants.findMany({
-        where: eq(schema.participants.workshopId, params.workshopId),
-      });
+      const workshopParticipants = await db.select().from(schema.liveParticipants)
+        .where(eq(schema.liveParticipants.workshopId, params.workshopId));
 
       const useCaseCountResult = await db
         .select({ count: count() })

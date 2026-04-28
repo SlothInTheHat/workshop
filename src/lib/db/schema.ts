@@ -59,6 +59,19 @@ export const breakoutTeams = pgTable('breakout_teams', {
     .notNull()
     .references(() => workshops.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
+  memberIds: jsonb('member_ids').$type<string[]>().default([]),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const liveParticipants = pgTable('live_participants', {
+  id: text('id').primaryKey(),
+  workshopId: text('workshop_id').notNull(),
+  name: text('name').notNull(),
+  role: text('role').notNull().default('contributor'),
+  initials: text('initials').notNull(),
+  color: text('color').notNull().default('bg-blue-400'),
+  teamId: text('team_id'),
+  presence: text('presence').notNull().default('remote'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
