@@ -464,7 +464,6 @@
             {#each [
               { id: 'overview', label: 'Overview' },
               { id: 'participants', label: `Participants (${participants.length})` },
-              { id: 'artifacts', label: `Artifacts (${artifacts.length})` },
               { id: 'context', label: 'AI Context' },
               { id: 'teams', label: 'Teams' },
             ] as tab}
@@ -677,59 +676,6 @@
                 <button
                   onclick={addParticipant}
                   disabled={addingParticipant || !newName.trim()}
-                  class="px-4 py-2.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg transition-colors text-[13px] font-medium disabled:opacity-50"
-                >
-                  Add
-                </button>
-              </div>
-
-            <!-- ARTIFACTS -->
-            {:else if activeTab === 'artifacts'}
-              <h2 class="text-[18px] text-gray-900 font-semibold mb-2">Reference Materials</h2>
-              <p class="text-[13px] text-gray-500 mb-6">Add links or documents contributors should review before the workshop.</p>
-
-              {#if artifactError}
-                <p class="text-[13px] text-red-600 mb-2">{artifactError}</p>
-              {/if}
-
-              <!-- Existing artifacts -->
-              {#if artifacts.length > 0}
-                <div class="space-y-2 mb-6">
-                  {#each artifacts as a}
-                    <div class="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
-                      <div class="flex items-center gap-3">
-                        <div>
-                          <p class="text-[13px] text-gray-900 font-medium">{a.title}</p>
-                          <a href={a.storageUrl} target="_blank" rel="noopener" class="text-[11px] text-[#6B9695] hover:underline">{a.storageUrl.slice(0, 60)}{a.storageUrl.length > 60 ? '…' : ''}</a>
-                        </div>
-                      </div>
-                      <button onclick={() => deleteArtifact(a.id)} class="text-gray-300 hover:text-red-400 transition-colors text-[12px]">Remove</button>
-                    </div>
-                  {/each}
-                </div>
-              {/if}
-
-              <div class="flex gap-2 flex-wrap">
-                <input
-                  type="text"
-                  bind:value={artifactTitle}
-                  placeholder="Title *"
-                  class="flex-1 min-w-[140px] px-3 py-2.5 border border-gray-300 rounded-lg text-[14px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#6B9695] focus:border-transparent placeholder:text-gray-400"
-                />
-                <input
-                  type="url"
-                  bind:value={artifactUrl}
-                  placeholder="https://... *"
-                  class="flex-1 min-w-[200px] px-3 py-2.5 border border-gray-300 rounded-lg text-[14px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#6B9695] focus:border-transparent placeholder:text-gray-400"
-                />
-                <select bind:value={artifactType} class="px-3 py-2.5 border border-gray-300 rounded-lg text-[14px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#6B9695] bg-white">
-                  <option value="document">Document</option>
-                  <option value="link">Link</option>
-                  <option value="image">Image</option>
-                </select>
-                <button
-                  onclick={uploadArtifact}
-                  disabled={addingArtifact || !artifactTitle.trim() || !artifactUrl.trim()}
                   class="px-4 py-2.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg transition-colors text-[13px] font-medium disabled:opacity-50"
                 >
                   Add
