@@ -18,6 +18,11 @@
   let submitted = $state(data.existingInput?.status === 'completed');
   let submitError = $state('');
 
+  let uploadingPDF = $state(false);
+  let pdfFileName = $state('');
+  let pdfError = $state('');
+  let pdfSuccess = $state(false);
+
   // Track whether input record exists on server
   let inputCreated = $state(data.existingInput !== null);
 
@@ -96,6 +101,64 @@
       setTimeout(() => { if (saveStatus === 'saved') saveStatus = 'idle'; }, 2000);
     } catch {
       saveStatus = 'error';
+    }
+  }
+
+  async function handlePDFUpload(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      pdfError = 'Please upload a PDF file';
+      return;
+    }
+
+    pdfFileName = file.name;
+    pdfError = '';
+    uploadingPDF = true;
+    pdfSuccess = false;
+
+    try {
+      const formData = new FormData();
+      formData.append('pdf', file);
+
+      const res = await fetch(`/api/workshops/${workshop.id}/extract-pdf`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        pdfError = err.message || 'Failed to process PDF';
+        return;
+      }
+
+      const extracted = await res.json();
+
+      // Auto-populate fields (only if they are empty)
+      if (extracted.goalsAndObjectives && !goals)
+        goals = extracted.goalsAndObjectives;
+      if (extracted.painPoints && !painPoints)
+        painPoints = extracted.painPoints;
+      if (extracted.currentWorkflow && !currentWorkflow)
+        currentWorkflow = extracted.currentWorkflow;
+      if (extracted.constraints && !constraints)
+        constraints = extracted.constraints;
+      if (extracted.successCriteria && !successCriteria)
+        successCriteria = extracted.successCriteria;
+      if (extracted.strategicPillars && !strategicPillars)
+        strategicPillars = extracted.strategicPillars;
+
+      pdfSuccess = true;
+
+      // Trigger autosave
+      scheduleAutoSave();
+
+    } catch (err) {
+      pdfError = 'Failed to process PDF. Please try again.';
+    } finally {
+      uploadingPDF = false;
     }
   }
 
@@ -216,6 +279,65 @@
       <div class="grid grid-cols-3 gap-6">
         <!-- Main form -->
         <div class="col-span-2 space-y-5">
+
+          <!-- PDF Upload Section -->
+          <div class="bg-[#f0f7f7] border border-[#6B9695]/30 rounded-xl p-5 mb-5">
+            <div class="flex items-start gap-3">
+              <div class="w-8 h-8 rounded-lg bg-[#6B9695] flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                </svg>
+              </div>
+              <div class="flex-1">
+                <h3 class="text-[14px] font-semibold text-gray-900 mb-1">
+                  Auto-fill with AI
+                </h3>
+                <p class="text-[12px] text-gray-500 mb-3">
+                  Upload a PDF document and AI will automatically
+                  fill in the form fields below based on its content.
+                </p>
+
+                {#if pdfSuccess}
+                  <div class="flex items-center gap-2 text-[12px] text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-3">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Form auto-filled from {pdfFileName}. Review and edit below.
+                  </div>
+                {/if}
+
+                {#if pdfError}
+                  <div class="text-[12px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
+                    {pdfError}
+                  </div>
+                {/if}
+
+                <label class="cursor-pointer">
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    class="hidden"
+                    onchange={handlePDFUpload}
+                    disabled={uploadingPDF}
+                  />
+                  <span class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-[#6B9695] text-[#6B9695] hover:bg-[#6B9695] hover:text-white rounded-lg text-[13px] font-medium transition-colors {uploadingPDF ? 'opacity-50 cursor-not-allowed' : ''}">
+                    {#if uploadingPDF}
+                      <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                      </svg>
+                      Reading PDF...
+                    {:else}
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                      </svg>
+                      {pdfFileName ? 'Upload Different PDF' : 'Upload PDF'}
+                    {/if}
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
 
           <!-- Progress bar -->
           <div class="bg-white rounded-lg border border-gray-200 p-4">
