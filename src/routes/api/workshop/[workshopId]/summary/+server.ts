@@ -39,15 +39,26 @@ export const POST: RequestHandler = async ({ params }) => {
 
   if (isDatabaseEnabled && db) {
     // Workshop may be in `workshops` (live) or `pre_workshops` (pre-phase) table
+    // Find workshop — check live workshops table first, then pre_workshops
     let workshopTitle = params.workshopId;
+    let workshopClient = '';
+    let workshopObjectives = 'Not specified';
+    let workshopPillars = 'Not specified';
+
     const liveWs = await db.select().from(schema.workshops)
       .where(eq(schema.workshops.id, params.workshopId)).limit(1);
     if (liveWs.length) {
       workshopTitle = liveWs[0].title;
+      workshopClient = liveWs[0].client ?? '';
     } else {
       const preWs = await db.select().from(schema.preWorkshops)
         .where(eq(schema.preWorkshops.id, params.workshopId)).limit(1);
-      if (preWs.length) workshopTitle = preWs[0].title;
+      if (preWs.length) {
+        workshopTitle = preWs[0].title;
+        workshopClient = preWs[0].tenantId ?? '';
+        if (preWs[0].objective) workshopObjectives = preWs[0].objective;
+        if (preWs[0].strategicPillars?.length) workshopPillars = (preWs[0].strategicPillars as string[]).join(', ');
+      }
     }
 
     // Get all use cases
@@ -97,13 +108,10 @@ export const POST: RequestHandler = async ({ params }) => {
       .sort((a, b) => b.finalScore - a.finalScore);
 
     // Build prompt
-    const workshopObjectives = Array.isArray(workshop.objectives) ? workshop.objectives.join(', ') : 'Not specified';
-    const workshopPillars = Array.isArray(workshop.strategicPillars) ? workshop.strategicPillars.join(', ') : 'Not specified';
-
     const prompt = `You are analyzing a workshop that generated ${useCases.length} use cases. Provide a structured summary in JSON format.
 
-Workshop: ${workshop.title}
-Client: ${workshop.client}
+Workshop: ${workshopTitle}
+Client: ${workshopClient}
 Workshop Objectives: ${workshopObjectives}
 Strategic Pillars: ${workshopPillars}
 

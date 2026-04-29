@@ -32,8 +32,8 @@
 
   const workshopId = $page.params.workshopId;
 
-  // Get currentParticipantId from URL query params (?participantId=p1)
-  let currentParticipantId = $state('p1'); // Default fallback
+  // Participant ID from server load (live_participants lookup by session name)
+  let currentParticipantId = $state(data.participantId ?? '');
 
   // Voting status tracking
   let votingStatus = $state({ finishedCount: 0, totalParticipants: 0, allFinished: false, finishedParticipantIds: [] as string[] });
@@ -43,13 +43,6 @@
   let pollInterval: ReturnType<typeof setInterval> | null = null;
 
   onMount(async () => {
-    // Get participantId from URL params
-    const urlParams = new URLSearchParams(window.location.search);
-    const paramParticipantId = urlParams.get('participantId');
-    if (paramParticipantId) {
-      currentParticipantId = paramParticipantId;
-    }
-
     await loadWorkshopData();
     await loadVotingStatus();
 
@@ -129,32 +122,28 @@
     }
   }
 
+  let finishingVote = $state(false);
+
   async function finishVoting() {
-    console.log('[FINISH VOTING] Starting, participantId:', currentParticipantId);
+    if (!currentParticipantId) return;
     showFinishConfirmation = false;
-
+    finishingVote = true;
     try {
-      const url = `/api/workshop/${workshopId}/participants/${currentParticipantId}/finish-voting`;
-      console.log('[FINISH VOTING] Calling:', url);
-
-      const res = await fetch(url, {
-        method: 'POST',
-      });
-
-      console.log('[FINISH VOTING] Response status:', res.status);
-
+      const res = await fetch(
+        `/api/workshop/${workshopId}/participants/${currentParticipantId}/finish-voting`,
+        { method: 'POST' }
+      );
       if (res.ok) {
-        console.log('[FINISH VOTING] Success! Marked as finished');
         hasFinishedVoting = true;
-
-        // Polling is already running in onMount, so voting status will be checked automatically
-        // This will cause everyone to transition to Round 2 within 3 seconds when allFinished is true
+        await loadVotingStatus();
       } else {
         const errorText = await res.text();
-        console.error('[FINISH VOTING] Failed:', res.status, res.statusText, errorText);
+        console.error('[FINISH VOTING] Failed:', res.status, errorText);
       }
     } catch (err) {
       console.error('[FINISH VOTING] Error:', err);
+    } finally {
+      finishingVote = false;
     }
   }
 
@@ -703,52 +692,44 @@
         </span>
       </button>
 
-      <!-- Round 2 Tab — unlocked once voting is complete or facilitator skips -->
+      <!-- Round 2 Tab — contributors need allFinished; facilitators always unlocked -->
       <button
-        onclick={async () => { if (votingStatus.allFinished || hasFinishedVoting || isFacilitator) { activePhase = 'round2'; await loadStackRank(); } }}
-        disabled={!votingStatus.allFinished && !hasFinishedVoting && !isFacilitator}
+        onclick={async () => { if (votingStatus.allFinished || isFacilitator) { activePhase = 'round2'; await loadStackRank(); } }}
+        disabled={!votingStatus.allFinished && !isFacilitator}
         class={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-md transition-all ${
           activePhase === 'round2'
             ? 'bg-[#6B9695] text-white shadow-sm'
-            : (votingStatus.allFinished || hasFinishedVoting || isFacilitator)
+            : (votingStatus.allFinished || isFacilitator)
             ? 'bg-transparent text-gray-600 hover:bg-gray-50'
             : 'bg-transparent text-gray-400 cursor-not-allowed opacity-50'
         }`}
       >
         <div class={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] ${
           activePhase === 'round2' ? 'bg-white text-[#6B9695]'
-            : (votingStatus.allFinished || hasFinishedVoting || isFacilitator) ? 'bg-green-500 text-white'
+            : (votingStatus.allFinished || isFacilitator) ? 'bg-green-500 text-white'
             : 'bg-gray-300 text-gray-500'
-        }`} style="font-family: Inter, sans-serif; font-weight: 600">
-          2
-        </div>
-        <span class="text-[12px]" style="font-family: Inter, sans-serif; font-weight: 500">
-          Round 2 – Voting Results
-        </span>
+        }`} style="font-family: Inter, sans-serif; font-weight: 600">2</div>
+        <span class="text-[12px]" style="font-family: Inter, sans-serif; font-weight: 500">Round 2 – Voting Results</span>
       </button>
 
-      <!-- Executive Summary Tab — unlocked once user has voted -->
+      <!-- Executive Summary Tab — same gating as Round 2 -->
       <button
-        onclick={async () => { if (votingStatus.allFinished || hasFinishedVoting || isFacilitator) { activePhase = 'final'; await loadStackRank(); } }}
-        disabled={!votingStatus.allFinished && !hasFinishedVoting && !isFacilitator}
+        onclick={async () => { if (votingStatus.allFinished || isFacilitator) { activePhase = 'final'; await loadStackRank(); } }}
+        disabled={!votingStatus.allFinished && !isFacilitator}
         class={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-md transition-all ${
           activePhase === 'final'
             ? 'bg-[#6B9695] text-white shadow-sm'
-            : (votingStatus.allFinished || hasFinishedVoting || isFacilitator)
+            : (votingStatus.allFinished || isFacilitator)
             ? 'bg-transparent text-gray-600 hover:bg-gray-50'
             : 'bg-transparent text-gray-400 cursor-not-allowed opacity-50'
         }`}
       >
         <div class={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] ${
           activePhase === 'final' ? 'bg-white text-[#6B9695]'
-            : (votingStatus.allFinished || hasFinishedVoting || isFacilitator) ? 'bg-gray-200 text-gray-600'
+            : (votingStatus.allFinished || isFacilitator) ? 'bg-gray-200 text-gray-600'
             : 'bg-gray-300 text-gray-500'
-        }`} style="font-family: Inter, sans-serif; font-weight: 600">
-          3
-        </div>
-        <span class="text-[12px]" style="font-family: Inter, sans-serif; font-weight: 500">
-          Executive Summary
-        </span>
+        }`} style="font-family: Inter, sans-serif; font-weight: 600">3</div>
+        <span class="text-[12px]" style="font-family: Inter, sans-serif; font-weight: 500">Executive Summary</span>
       </button>
     </div>
 
@@ -938,11 +919,12 @@
                 </p>
               </div>
               <button
-                onclick={() => showFinishConfirmation = true}
-                class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+                onclick={finishVoting}
+                disabled={finishingVote || !currentParticipantId}
+                class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md transition-colors"
               >
                 <span class="text-[13px]" style="font-family: Inter, sans-serif; font-weight: 600">
-                  Finish Voting
+                  {finishingVote ? 'Submitting...' : 'Finish Voting'}
                 </span>
               </button>
             </div>

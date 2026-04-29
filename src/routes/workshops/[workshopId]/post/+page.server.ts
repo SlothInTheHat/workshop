@@ -1,6 +1,8 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getSession } from '$lib/session';
+import { getDb, schema } from '$lib/db/index';
+import { and, eq } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
   const workshopId = params.workshopId;
@@ -44,6 +46,22 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 
     const session = getSession(cookies);
 
+    // Look up the current user's live_participant ID so finish-voting works
+    let participantId: string | null = null;
+    if (session?.name) {
+      const db = getDb();
+      if (db) {
+        try {
+          const rows = await db.select().from(schema.liveParticipants)
+            .where(and(
+              eq(schema.liveParticipants.workshopId, workshopId),
+              eq(schema.liveParticipants.name, session.name)
+            )).limit(1);
+          if (rows.length) participantId = rows[0].id;
+        } catch {}
+      }
+    }
+
     return {
       workshop: workshopData.workshop,
       teams,
@@ -51,6 +69,7 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
       stackRank,
       existingSummary,
       isFacilitator: session?.role === 'facilitator',
+      participantId,
     };
   } catch (err) {
     console.error('Failed to load workshop data:', err);
