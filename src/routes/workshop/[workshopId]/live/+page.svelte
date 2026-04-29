@@ -17,6 +17,9 @@
   let isAiCollapsed = $state(false);
   let isNavCollapsed = $state(false);
   let zoom = $state(1);
+  let pan = $state({ x: 0, y: 0 });
+  let panning = $state(false);
+  let panStart = { x: 0, y: 0 };
   let aiInput = $state('');
   let aiStreaming = $state(false);
   let selectedCluster = $state<number | null>(null);
@@ -153,45 +156,73 @@
     { color: 'rgba(159,122,234,0.10)', borderColor: 'rgba(159,122,234,0.35)', labelColor: '#805AD5' },
   ];
 
-  const CANVAS_W = 1600, CANVAS_H = 900;
-  const CARD_W = 256, CARD_H = 240, GAP = 20;
+  const CANVAS_W = 2400, CANVAS_H = 1600;
+  const CARD_W = 256, CARD_H = 230, GAP = 32;
 
   function computeClusterLayout(clusters: AiCluster[]) {
     const n = clusters.length;
     if (!n) { clusteredCardPositions = {}; voronoiRegions = []; return; }
 
-    const seeds = (SEEDS_BY_N[Math.min(n, 6)] ?? SEEDS_BY_N[6]).slice(0, n);
+    const seeds = (SEEDS_BY_N[Math.min(n, 6)] ?? SEEDS_BY_N[6])
+      .slice(0, n)
+      .map(s => ({ x: s.x * (CANVAS_W / 1600), y: s.y * (CANVAS_H / 900) }));
 
     const pos: Record<string, { x: number; y: number }> = {};
     const regions: VoronoiRegion[] = [];
 
+    // Compute all Voronoi polygons first so we know each cell's bounds
+    const polys = seeds.map((_, i) => voronoiCell(seeds, i, CANVAS_W, CANVAS_H));
+
     clusters.forEach((cluster, i) => {
-      const seed = seeds[i];
+      const poly = polys[i];
+      const centroid = polygonCentroid(poly);
       const cardCount = cluster.useCaseIds.length;
-      const cols = Math.min(Math.max(1, Math.ceil(Math.sqrt(cardCount))), 3);
+
+      // Use the cell bounding box to spread cards, with padding from the Voronoi edges
+      const PAD = 80;
+      const xs = poly.map(p => p.x), ys = poly.map(p => p.y);
+      const cellX = Math.min(...xs) + PAD;
+      const cellY = Math.min(...ys) + PAD + 40; // extra top clearance for label
+      const cellW = Math.max(...xs) - Math.min(...xs) - PAD * 2;
+      const cellH = Math.max(...ys) - Math.min(...ys) - PAD * 2 - 40;
+
+      const cols = Math.min(Math.max(1, Math.floor(cellW / (CARD_W + GAP))), Math.max(1, Math.ceil(Math.sqrt(cardCount))));
       const rows = Math.ceil(cardCount / cols);
+
+      // Center the grid within the cell
       const gridW = cols * CARD_W + (cols - 1) * GAP;
       const gridH = rows * CARD_H + (rows - 1) * GAP;
+      const startX = centroid.x - gridW / 2;
+      const startY = centroid.y - gridH / 2 + 30;
 
       cluster.useCaseIds.forEach((id, idx) => {
         const col = idx % cols;
         const row = Math.floor(idx / cols);
         pos[id] = {
-          x: seed.x - gridW / 2 + col * (CARD_W + GAP),
-          y: seed.y - gridH / 2 + row * (CARD_H + GAP),
+          x: Math.max(cellX, Math.min(CANVAS_W - CARD_W - PAD, startX + col * (CARD_W + GAP))),
+          y: Math.max(cellY, Math.min(CANVAS_H - CARD_H - PAD, startY + row * (CARD_H + GAP))),
         };
       });
 
-      const poly = voronoiCell(seeds, i, CANVAS_W, CANVAS_H);
       regions.push({
         id: i,
         theme: cluster.theme,
         count: cardCount,
         useCaseIds: new Set(cluster.useCaseIds),
         polygon: poly,
-        centroid: polygonCentroid(poly),
+        centroid,
         ...VORONOI_PALETTE[i % VORONOI_PALETTE.length],
       });
+    });
+
+    // Position any unclustered cards (fallback to indexed grid in top-left)
+    const clusteredIds = new Set(Object.keys(pos));
+    let unclustered = 0;
+    cards.forEach(card => {
+      if (!clusteredIds.has(card.id)) {
+        pos[card.id] = { x: 60 + (unclustered % 5) * (CARD_W + GAP), y: 60 + Math.floor(unclustered / 5) * (CARD_H + GAP) };
+        unclustered++;
+      }
     });
 
     clusteredCardPositions = pos;
@@ -609,23 +640,33 @@
     didDrag = false;
     const rect = canvasEl!.getBoundingClientRect();
     dragOffset = {
-      x: (e.clientX - rect.left) / zoom - card.position.x,
-      y: (e.clientY - rect.top) / zoom - card.position.y,
+      x: (e.clientX - rect.left - pan.x) / zoom - card.position.x,
+      y: (e.clientY - rect.top - pan.y) / zoom - card.position.y,
     };
   }
 
+  function onCanvasMouseDown(e: MouseEvent) {
+    if (draggingId) return; // a card captured this event
+    panning = true;
+    panStart = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+  }
+
   function onCanvasMouseMove(e: MouseEvent) {
-    if (!draggingId || !canvasEl || viewMode === 'workshop-wide') return;
-    const dx = e.clientX - dragStartPos.x;
-    const dy = e.clientY - dragStartPos.y;
-    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) didDrag = true;
-    const rect = canvasEl.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / zoom - dragOffset.x;
-    const y = (e.clientY - rect.top) / zoom - dragOffset.y;
-    cards = cards.map(c => c.id === draggingId ? { ...c, position: { x, y } } : c);
+    if (draggingId && !viewMode.includes('workshop-wide')) {
+      const dx = e.clientX - dragStartPos.x;
+      const dy = e.clientY - dragStartPos.y;
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) didDrag = true;
+      const rect = canvasEl!.getBoundingClientRect();
+      const x = (e.clientX - rect.left - pan.x) / zoom - dragOffset.x;
+      const y = (e.clientY - rect.top - pan.y) / zoom - dragOffset.y;
+      cards = cards.map(c => c.id === draggingId ? { ...c, position: { x, y } } : c);
+    } else if (panning && !draggingId) {
+      pan = { x: e.clientX - panStart.x, y: e.clientY - panStart.y };
+    }
   }
 
   async function onCanvasMouseUp() {
+    panning = false;
     if (!draggingId) return;
     const id = draggingId;
     const wasDrag = didDrag;
@@ -736,8 +777,9 @@
 
   function switchView(mode: ViewMode) {
     viewMode = mode;
+    pan = { x: 0, y: 0 };
     if (mode === 'workshop-wide') {
-      zoom = 0.65;
+      zoom = 0.5;
       teamFilter = 'All Teams';
       fetchAiClusters();
     } else {
@@ -1068,11 +1110,12 @@
     <!-- Main Canvas -->
     <div
       bind:this={canvasEl}
+      onmousedown={onCanvasMouseDown}
       onmousemove={onCanvasMouseMove}
       onmouseup={onCanvasMouseUp}
       onmouseleave={onCanvasMouseUp}
       class="flex-1 relative overflow-hidden"
-      style="background-color: #FAFAF9; background-image: linear-gradient(rgba(0,0,0,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.02) 1px, transparent 1px); background-size: 40px 40px; cursor: {draggingId ? 'grabbing' : 'default'};"
+      style="background-color: #FAFAF9; background-image: linear-gradient(rgba(0,0,0,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.02) 1px, transparent 1px); background-size: 40px 40px; cursor: {draggingId || panning ? 'grabbing' : 'grab'};"
     >
       <!-- Sidebar toggle -->
       <button onclick={() => isNavCollapsed = !isNavCollapsed}
@@ -1112,8 +1155,8 @@
         </div>
       {/if}
 
-      <!-- Zoomable canvas -->
-      <div class="absolute inset-0 pt-16" style="transform: scale({zoom}); transform-origin: 0 0; transition: {draggingId ? 'none' : 'transform 0.1s ease-out'};">
+      <!-- Zoomable + pannable canvas -->
+      <div class="absolute inset-0 pt-16" style="transform: translate({pan.x}px, {pan.y}px) scale({zoom}); transform-origin: 0 0; transition: {draggingId || panning ? 'none' : 'transform 0.1s ease-out'};">
 
         <!-- Voronoi cluster regions (workshop view with AI clusters) -->
         {#if viewMode === 'workshop-wide' && voronoiRegions.length > 0}
@@ -1274,7 +1317,7 @@
         {/each}
       </div>
 
-      <!-- Zoom Controls -->
+      <!-- Zoom + Pan Controls -->
       <div class="absolute bottom-5 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-white border border-gray-200 rounded-lg shadow-lg p-2">
         <button onclick={() => zoom = Math.max(zoom - 0.1, 0.2)} class="p-1.5 hover:bg-gray-100 rounded-md transition-colors" title="Zoom out">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-700"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
@@ -1282,6 +1325,10 @@
         <span class="px-2 text-[11px] text-gray-600 font-medium min-w-[44px] text-center">{Math.round(zoom * 100)}%</span>
         <button onclick={() => zoom = Math.min(zoom + 0.1, 2)} class="p-1.5 hover:bg-gray-100 rounded-md transition-colors" title="Zoom in">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-700"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        </button>
+        <div class="w-px h-5 bg-gray-200 mx-0.5"></div>
+        <button onclick={() => { zoom = viewMode === 'workshop-wide' ? 0.5 : 1; pan = { x: 0, y: 0 }; }} class="p-1.5 hover:bg-gray-100 rounded-md transition-colors" title="Reset view">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-700"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
         </button>
       </div>
 
