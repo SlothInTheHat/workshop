@@ -17,17 +17,10 @@ import { ANTHROPIC_API_KEY } from '$env/static/private';
 
 export const GET: RequestHandler = async ({ params }) => {
   if (isDatabaseEnabled && db) {
-    const workshop = await db.query.workshops.findFirst({
-      where: eq(schema.workshops.id, params.workshopId),
-    });
-    if (!workshop) throw error(404, 'Workshop not found');
-
-    const summary = await db.query.workshopSummaries.findFirst({
-      where: eq(schema.workshopSummaries.workshopId, params.workshopId),
-    });
-    if (!summary) throw error(404, 'Summary not generated yet');
-
-    return json(summary);
+    const summaryRows = await db.select().from(schema.workshopSummaries)
+      .where(eq(schema.workshopSummaries.workshopId, params.workshopId)).limit(1);
+    if (!summaryRows.length) throw error(404, 'Summary not generated yet');
+    return json(summaryRows[0]);
   } else {
     const workshop = workshops.get(params.workshopId);
     if (!workshop) throw error(404, 'Workshop not found');
@@ -45,15 +38,21 @@ export const POST: RequestHandler = async ({ params }) => {
   if (!ANTHROPIC_API_KEY) throw error(500, 'ANTHROPIC_API_KEY not configured');
 
   if (isDatabaseEnabled && db) {
-    const workshop = await db.query.workshops.findFirst({
-      where: eq(schema.workshops.id, params.workshopId),
-    });
-    if (!workshop) throw error(404, 'Workshop not found');
+    // Workshop may be in `workshops` (live) or `pre_workshops` (pre-phase) table
+    let workshopTitle = params.workshopId;
+    const liveWs = await db.select().from(schema.workshops)
+      .where(eq(schema.workshops.id, params.workshopId)).limit(1);
+    if (liveWs.length) {
+      workshopTitle = liveWs[0].title;
+    } else {
+      const preWs = await db.select().from(schema.preWorkshops)
+        .where(eq(schema.preWorkshops.id, params.workshopId)).limit(1);
+      if (preWs.length) workshopTitle = preWs[0].title;
+    }
 
     // Get all use cases
-    const useCases = await db.query.useCases.findMany({
-      where: eq(schema.useCases.workshopId, params.workshopId),
-    });
+    const useCases = await db.select().from(schema.useCases)
+      .where(eq(schema.useCases.workshopId, params.workshopId));
 
     // Guard: check if workshop has any use cases
     if (useCases.length === 0) {
@@ -61,9 +60,8 @@ export const POST: RequestHandler = async ({ params }) => {
     }
 
     // Get all scores
-    const allScores = await db.query.scores.findMany({
-      where: eq(schema.scores.workshopId, params.workshopId),
-    });
+    const allScores = await db.select().from(schema.scores)
+      .where(eq(schema.scores.workshopId, params.workshopId));
 
     // Calculate rankings (same logic as stackrank endpoint)
     const stackRank: RankedUseCase[] = useCases

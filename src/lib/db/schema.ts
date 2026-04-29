@@ -71,6 +71,7 @@ export const liveParticipants = pgTable('live_participants', {
   color: text('color').notNull().default('bg-blue-400'),
   teamId: text('team_id'),
   presence: text('presence').notNull().default('remote'),
+  hasVoted: boolean('has_voted').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

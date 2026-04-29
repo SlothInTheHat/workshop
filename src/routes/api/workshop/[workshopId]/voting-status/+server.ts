@@ -10,21 +10,18 @@ export const GET: RequestHandler = async ({ params }) => {
   const db = getDb();
 
   if (db) {
-    const workshopRows = await db.select().from(schema.workshops)
-      .where(eq(schema.workshops.id, workshopId));
-
-    if (workshopRows.length === 0) throw error(404, 'Workshop not found');
-    const workshop = workshopRows[0];
-
     const allParticipants = await db.select().from(schema.liveParticipants)
       .where(eq(schema.liveParticipants.workshopId, workshopId));
 
-    const finishedVoting = Array.isArray((workshop as any).finishedVoting) ? (workshop as any).finishedVoting : [];
-    const finishedCount = finishedVoting.length;
-    const totalParticipants = allParticipants.length;
-    const allFinished = finishedCount >= totalParticipants && totalParticipants > 0;
+    const finishedParticipantIds = allParticipants
+      .filter(p => p.hasVoted)
+      .map(p => p.id);
 
-    return json({ finishedCount, totalParticipants, allFinished, finishedParticipantIds: finishedVoting });
+    const finishedCount = finishedParticipantIds.length;
+    const totalParticipants = allParticipants.length;
+    const allFinished = totalParticipants > 0 && finishedCount >= totalParticipants;
+
+    return json({ finishedCount, totalParticipants, allFinished, finishedParticipantIds });
   }
 
   // In-memory fallback
@@ -35,7 +32,7 @@ export const GET: RequestHandler = async ({ params }) => {
   const finishedVoting = workshop.finishedVoting || new Set<string>();
   const finishedCount = finishedVoting.size;
   const totalParticipants = allParticipants.length;
-  const allFinished = finishedCount >= totalParticipants && totalParticipants > 0;
+  const allFinished = totalParticipants > 0 && finishedCount >= totalParticipants;
 
   return json({
     finishedCount,

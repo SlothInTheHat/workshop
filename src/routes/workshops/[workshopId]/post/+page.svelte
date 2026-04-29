@@ -703,23 +703,21 @@
         </span>
       </button>
 
-      <!-- Round 2 Tab -->
+      <!-- Round 2 Tab — unlocked once voting is complete or facilitator skips -->
       <button
-        onclick={async () => { if (votingStatus.allFinished || isFacilitator) { activePhase = 'round2'; await loadStackRank(); } }}
-        disabled={!votingStatus.allFinished && !isFacilitator}
+        onclick={async () => { if (votingStatus.allFinished || hasFinishedVoting || isFacilitator) { activePhase = 'round2'; await loadStackRank(); } }}
+        disabled={!votingStatus.allFinished && !hasFinishedVoting && !isFacilitator}
         class={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-md transition-all ${
           activePhase === 'round2'
             ? 'bg-[#6B9695] text-white shadow-sm'
-            : votingStatus.allFinished
+            : (votingStatus.allFinished || hasFinishedVoting || isFacilitator)
             ? 'bg-transparent text-gray-600 hover:bg-gray-50'
             : 'bg-transparent text-gray-400 cursor-not-allowed opacity-50'
         }`}
       >
         <div class={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] ${
-          activePhase === 'round2'
-            ? 'bg-white text-[#6B9695]'
-            : votingStatus.allFinished
-            ? 'bg-green-500 text-white'
+          activePhase === 'round2' ? 'bg-white text-[#6B9695]'
+            : (votingStatus.allFinished || hasFinishedVoting || isFacilitator) ? 'bg-green-500 text-white'
             : 'bg-gray-300 text-gray-500'
         }`} style="font-family: Inter, sans-serif; font-weight: 600">
           2
@@ -729,23 +727,21 @@
         </span>
       </button>
 
-      <!-- Executive Summary Tab -->
+      <!-- Executive Summary Tab — unlocked once user has voted -->
       <button
-        onclick={() => { if (votingStatus.allFinished || isFacilitator) activePhase = 'final'; }}
-        disabled={!votingStatus.allFinished && !isFacilitator}
+        onclick={async () => { if (votingStatus.allFinished || hasFinishedVoting || isFacilitator) { activePhase = 'final'; await loadStackRank(); } }}
+        disabled={!votingStatus.allFinished && !hasFinishedVoting && !isFacilitator}
         class={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-md transition-all ${
           activePhase === 'final'
             ? 'bg-[#6B9695] text-white shadow-sm'
-            : votingStatus.allFinished
+            : (votingStatus.allFinished || hasFinishedVoting || isFacilitator)
             ? 'bg-transparent text-gray-600 hover:bg-gray-50'
             : 'bg-transparent text-gray-400 cursor-not-allowed opacity-50'
         }`}
       >
         <div class={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] ${
-          activePhase === 'final'
-            ? 'bg-white text-[#6B9695]'
-            : votingStatus.allFinished
-            ? 'bg-gray-200 text-gray-600'
+          activePhase === 'final' ? 'bg-white text-[#6B9695]'
+            : (votingStatus.allFinished || hasFinishedVoting || isFacilitator) ? 'bg-gray-200 text-gray-600'
             : 'bg-gray-300 text-gray-500'
         }`} style="font-family: Inter, sans-serif; font-weight: 600">
           3
