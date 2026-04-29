@@ -1635,12 +1635,14 @@
   </div>
 {/if}
 
-<!-- Edit Use Case Modal (includes additional details + comments) -->
+<!-- Edit Use Case Modal (form + AI analyst) -->
 {#if selectedCardId}
   {@const editingCard = cards.find(c => c.id === selectedCardId)}
   <div class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onclick={(e) => e.target === e.currentTarget && deselectCard()}>
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col" style="max-height: calc(100vh - 48px)">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl flex overflow-hidden" style="height: min(760px, calc(100vh - 48px))">
 
+      <!-- Left panel: form -->
+      <div class="w-[380px] shrink-0 border-r border-gray-100 flex flex-col">
       <!-- Header -->
       <div class="flex items-start justify-between px-6 py-5 border-b border-gray-100 shrink-0">
         <div>
@@ -1798,7 +1800,6 @@
 
       <!-- Footer actions -->
       <div class="px-6 py-4 border-t border-gray-100 shrink-0">
-        <p class="text-[11px] text-gray-400 mb-3">Tip: use the AI Analyst panel to suggest changes — click "Apply Changes" to auto-fill these fields.</p>
         <div class="flex gap-3">
           <button onclick={deselectCard}
             class="flex-1 py-2.5 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-lg text-[13px] font-medium transition-colors">
@@ -1810,6 +1811,82 @@
           </button>
         </div>
       </div>
+      </div><!-- end left panel -->
+
+      <!-- Right panel: AI Analyst for this card -->
+      <div class="flex-1 flex flex-col min-w-0">
+        <!-- AI header -->
+        <div class="px-5 py-5 border-b border-gray-100 shrink-0 flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-full bg-[#6B9695]/15 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6B9695" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            </div>
+            <div>
+              <p class="text-[13px] text-gray-900 font-semibold">AI Analyst</p>
+              <p class="text-[11px] text-[#6B9695]">Refining this use case</p>
+            </div>
+          </div>
+          {#if aiPreview}
+            <button onclick={applyAiPreview} disabled={savingEdit}
+              class="px-3 py-1.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[12px] font-medium transition-colors disabled:opacity-50">
+              Apply Changes
+            </button>
+          {/if}
+        </div>
+
+        <!-- Messages -->
+        <div class="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          {#if aiMessages.length === 0}
+            <div class="text-center py-10">
+              <p class="text-[13px] text-gray-400">Ask me to improve the title, summary, ratings, or framing of this use case.</p>
+            </div>
+          {/if}
+          {#each aiMessages as msg}
+            {#if msg.role === 'user'}
+              <div class="flex justify-end">
+                <div class="bg-[#F5F3F0] rounded-xl rounded-tr-sm px-4 py-2.5 max-w-[85%]">
+                  <p class="text-[13px] text-gray-900">{msg.content}</p>
+                </div>
+              </div>
+            {:else}
+              {@const displayContent = msg.content.replace(/<usecase_preview>[\s\S]*?<\/usecase_preview>/g, '').trim()}
+              {#if displayContent}
+                <div class="flex gap-2.5 max-w-[90%]">
+                  <div class="w-5 h-5 rounded-full bg-[#6B9695]/15 flex items-center justify-center shrink-0 mt-0.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#6B9695" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  </div>
+                  <div class="bg-[#F0F9F9] border border-[#6B9695]/20 rounded-xl rounded-tl-sm px-4 py-2.5">
+                    <p class="text-[13px] text-gray-900 whitespace-pre-wrap">{displayContent}{#if aiStreaming && msg === aiMessages[aiMessages.length - 1]}<span class="inline-block w-1.5 h-3.5 bg-[#6B9695] ml-0.5 animate-pulse rounded-sm"></span>{/if}</p>
+                  </div>
+                </div>
+              {:else if aiStreaming && msg === aiMessages[aiMessages.length - 1]}
+                <div class="flex gap-2.5">
+                  <div class="w-5 h-5 rounded-full bg-[#6B9695]/15 flex items-center justify-center shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#6B9695" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  </div>
+                  <div class="bg-[#F0F9F9] border border-[#6B9695]/20 rounded-xl rounded-tl-sm px-4 py-2.5">
+                    <span class="inline-block w-1.5 h-3.5 bg-[#6B9695] animate-pulse rounded-sm"></span>
+                  </div>
+                </div>
+              {/if}
+            {/if}
+          {/each}
+        </div>
+
+        <!-- Input -->
+        <div class="px-5 py-4 border-t border-gray-100 shrink-0">
+          <div class="flex gap-2">
+            <input type="text" placeholder="Ask the AI to improve this use case..." bind:value={aiInput}
+              onkeydown={(e) => e.key === 'Enter' && sendAiMessage()}
+              disabled={aiStreaming}
+              class="flex-1 px-3 py-2 bg-[#FAFAF9] border border-gray-200 rounded-lg text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#6B9695] disabled:opacity-50" />
+            <button onclick={sendAiMessage} disabled={aiStreaming || !aiInput.trim()}
+              class="px-4 py-2 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg text-[13px] font-medium transition-colors disabled:opacity-50">
+              {aiStreaming ? '...' : 'Send'}
+            </button>
+          </div>
+        </div>
+      </div><!-- end right AI panel -->
     </div>
   </div>
 {/if}
