@@ -14,9 +14,7 @@ function assertTeamBelongsToWorkshop(teamId: string, workshopId: string) {
 
 export const GET: RequestHandler = async ({ params }) => {
   if (isDatabaseEnabled && db) {
-    const team = await db.query.teams.findFirst({
-      where: eq(schema.teams.id, params.teamId),
-    });
+    const team = (await db.select().from(schema.breakoutTeams).where(eq(schema.breakoutTeams.id, params.teamId)))[0];
     if (!team || team.workshopId !== params.workshopId) throw error(404, 'Team not found');
     return json(team);
   } else {
@@ -29,9 +27,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
   const body = await request.json().catch(() => ({}));
 
   if (isDatabaseEnabled && db) {
-    const existing = await db.query.teams.findFirst({
-      where: eq(schema.teams.id, params.teamId),
-    });
+    const existing = (await db.select().from(schema.breakoutTeams).where(eq(schema.breakoutTeams.id, params.teamId)))[0];
     if (!existing || existing.workshopId !== params.workshopId) throw error(404, 'Team not found');
 
     const patch: Record<string, unknown> = {};
@@ -41,9 +37,9 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
     if (Object.keys(patch).length === 0) throw error(400, 'No valid fields to update');
 
     const [updated] = await db
-      .update(schema.teams)
+      .update(schema.breakoutTeams)
       .set(patch)
-      .where(eq(schema.teams.id, params.teamId))
+      .where(eq(schema.breakoutTeams.id, params.teamId))
       .returning();
 
     // If memberIds changed, update participants
@@ -51,9 +47,9 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
       const newMemberIds = patch.memberIds as string[];
       for (const participantId of newMemberIds) {
         await db
-          .update(schema.participants)
+          .update(schema.liveParticipants)
           .set({ teamId: params.teamId })
-          .where(eq(schema.participants.id, participantId));
+          .where(eq(schema.liveParticipants.id, participantId));
       }
     }
 
@@ -74,21 +70,19 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 
 export const DELETE: RequestHandler = async ({ params }) => {
   if (isDatabaseEnabled && db) {
-    const team = await db.query.teams.findFirst({
-      where: eq(schema.teams.id, params.teamId),
-    });
+    const team = (await db.select().from(schema.breakoutTeams).where(eq(schema.breakoutTeams.id, params.teamId)))[0];
     if (!team || team.workshopId !== params.workshopId) throw error(404, 'Team not found');
 
     // Unassign participants from this team
     const memberIds = team.memberIds as string[];
     for (const participantId of memberIds) {
       await db
-        .update(schema.participants)
+        .update(schema.liveParticipants)
         .set({ teamId: null })
-        .where(eq(schema.participants.id, participantId));
+        .where(eq(schema.liveParticipants.id, participantId));
     }
 
-    await db.delete(schema.teams).where(eq(schema.teams.id, params.teamId));
+    await db.delete(schema.breakoutTeams).where(eq(schema.breakoutTeams.id, params.teamId));
 
     return new Response(null, { status: 204 });
   } else {

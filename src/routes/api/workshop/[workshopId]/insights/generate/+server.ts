@@ -125,9 +125,7 @@ export const POST: RequestHandler = async ({ params }) => {
     }
 
     // Cross-team overlap detection
-    const workshopTeams = await db.query.teams.findMany({
-      where: eq(schema.teams.workshopId, params.workshopId),
-    });
+    const workshopTeams = await db.select().from(schema.breakoutTeams).where(eq(schema.breakoutTeams.workshopId, params.workshopId));
 
     if (workshopTeams.length > 1) {
       for (const uc of useCaseList) {

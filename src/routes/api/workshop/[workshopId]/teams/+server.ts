@@ -13,9 +13,7 @@ export const GET: RequestHandler = async ({ params }) => {
     });
     if (!workshop) throw error(404, 'Workshop not found');
 
-    const teams = await db.query.teams.findMany({
-      where: eq(schema.teams.workshopId, params.workshopId),
-    });
+    const teams = await db.select().from(schema.breakoutTeams).where(eq(schema.breakoutTeams.workshopId, params.workshopId));
 
     return json(teams);
   } else {
@@ -39,7 +37,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
     if (!workshop) throw error(404, 'Workshop not found');
 
     const [team] = await db
-      .insert(schema.teams)
+      .insert(schema.breakoutTeams)
       .values({
         id: randomUUID(),
         workshopId: params.workshopId,
@@ -51,9 +49,9 @@ export const POST: RequestHandler = async ({ params, request }) => {
     // Update participants with team assignment
     for (const participantId of memberIds) {
       await db
-        .update(schema.participants)
+        .update(schema.liveParticipants)
         .set({ teamId: team.id })
-        .where(eq(schema.participants.id, participantId));
+        .where(eq(schema.liveParticipants.id, participantId));
     }
 
     return json(team, { status: 201 });

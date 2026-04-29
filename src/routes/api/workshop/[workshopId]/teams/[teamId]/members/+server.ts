@@ -20,14 +20,10 @@ export const POST: RequestHandler = async ({ params, request }) => {
   }
 
   if (isDatabaseEnabled && db) {
-    const team = await db.query.teams.findFirst({
-      where: eq(schema.teams.id, params.teamId),
-    });
+    const team = (await db.select().from(schema.breakoutTeams).where(eq(schema.breakoutTeams.id, params.teamId)))[0];
     if (!team || team.workshopId !== params.workshopId) throw error(404, 'Team not found');
 
-    const participant = await db.query.participants.findFirst({
-      where: eq(schema.participants.id, body.participantId),
-    });
+    const participant = (await db.select().from(schema.liveParticipants).where(eq(schema.liveParticipants.id, body.participantId)))[0];
     if (!participant || participant.workshopId !== params.workshopId) {
       throw error(404, 'Participant not found in this workshop');
     }
@@ -40,16 +36,16 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
     const newMemberIds = [...memberIds, body.participantId];
     const [updated] = await db
-      .update(schema.teams)
+      .update(schema.breakoutTeams)
       .set({ memberIds: newMemberIds })
-      .where(eq(schema.teams.id, params.teamId))
+      .where(eq(schema.breakoutTeams.id, params.teamId))
       .returning();
 
     // Update participant's teamId
     await db
-      .update(schema.participants)
+      .update(schema.liveParticipants)
       .set({ teamId: params.teamId })
-      .where(eq(schema.participants.id, body.participantId));
+      .where(eq(schema.liveParticipants.id, body.participantId));
 
     return json(updated);
   } else {
@@ -71,25 +67,23 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
   if (!participantId) throw error(400, 'participantId query param is required');
 
   if (isDatabaseEnabled && db) {
-    const team = await db.query.teams.findFirst({
-      where: eq(schema.teams.id, params.teamId),
-    });
+    const team = (await db.select().from(schema.breakoutTeams).where(eq(schema.breakoutTeams.id, params.teamId)))[0];
     if (!team || team.workshopId !== params.workshopId) throw error(404, 'Team not found');
 
     const memberIds = team.memberIds as string[];
     const newMemberIds = memberIds.filter((id) => id !== participantId);
 
     const [updated] = await db
-      .update(schema.teams)
+      .update(schema.breakoutTeams)
       .set({ memberIds: newMemberIds })
-      .where(eq(schema.teams.id, params.teamId))
+      .where(eq(schema.breakoutTeams.id, params.teamId))
       .returning();
 
     // Clear participant's teamId
     await db
-      .update(schema.participants)
+      .update(schema.liveParticipants)
       .set({ teamId: null })
-      .where(eq(schema.participants.id, participantId));
+      .where(eq(schema.liveParticipants.id, participantId));
 
     return json(updated);
   } else {
