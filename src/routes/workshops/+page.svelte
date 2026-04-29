@@ -4,7 +4,7 @@
   let { data }: { data: PageData } = $props();
   const { session, workshops } = $derived(data);
 
-  const isFacilitator = $derived(session.role === 'facilitator');
+  const isFacilitator = $derived(session?.role === 'facilitator');
 
   let searchQuery = $state('');
 
@@ -70,12 +70,16 @@
       <div class="flex items-center justify-between mb-6">
         <div>
           <h1 class="text-3xl text-gray-900 mb-1 font-bold">Workshop Mode</h1>
-          <p class="text-[13px] text-gray-500">
-            Signed in as <span class="font-medium text-gray-700">{session.name}</span>
-            <span class="ml-2 px-2 py-0.5 rounded-full text-[11px] font-medium {isFacilitator ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}">
-              {isFacilitator ? 'Facilitator' : 'Contributor'}
-            </span>
-          </p>
+          {#if session}
+            <p class="text-[13px] text-gray-500">
+              Signed in as <span class="font-medium text-gray-700">{session.name}</span>
+              <span class="ml-2 px-2 py-0.5 rounded-full text-[11px] font-medium {isFacilitator ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}">
+                {isFacilitator ? 'Facilitator' : 'Contributor'}
+              </span>
+            </p>
+          {:else}
+            <p class="text-[13px] text-gray-500">Create a workshop to get started, or <a href="/join" class="text-[#6B9695] font-medium hover:underline">join one with an access code</a>.</p>
+          {/if}
         </div>
         <div class="flex items-center gap-3">
           {#if isFacilitator}

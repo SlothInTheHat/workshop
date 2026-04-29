@@ -1,4 +1,3 @@
-import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getSession } from '$lib/session';
 import { getDb, schema } from '$lib/db/index';
@@ -6,7 +5,8 @@ import { eq, inArray } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ cookies }) => {
 	const session = getSession(cookies);
-	if (!session) redirect(303, '/join?return=/workshops');
+	// No session — show empty dashboard, not join page
+	if (!session) return { session: null, workshops: [] };
 
 	const db = getDb();
 
