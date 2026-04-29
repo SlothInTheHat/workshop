@@ -82,7 +82,7 @@
           {/if}
         </div>
         <div class="flex items-center gap-3">
-          {#if isFacilitator}
+          {#if isFacilitator || !session}
             <a href="/workshops/new"
               class="flex items-center gap-2 px-4 py-2.5 bg-[#6B9695] text-white hover:bg-[#5A8584] rounded-lg transition-colors text-[14px] font-medium">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -106,14 +106,14 @@
       <div class="bg-white rounded-lg border border-gray-200 p-16 text-center">
         <p class="text-3xl mb-3">📋</p>
         <h3 class="text-[15px] font-semibold text-gray-900 mb-2">No workshops yet</h3>
-        {#if isFacilitator}
+        {#if isFacilitator || !session}
           <p class="text-[13px] text-gray-500 mb-5">Create your first workshop to get started.</p>
           <a href="/workshops/new" class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#6B9695] text-white rounded-lg text-[13px] font-medium hover:bg-[#5A8584] transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Create Workshop
           </a>
         {:else}
-          <p class="text-[13px] text-gray-500">No workshops available yet. Check back with your facilitator.</p>
+          <p class="text-[13px] text-gray-500">No workshops yet. Check back with your facilitator.</p>
         {/if}
       </div>
     {:else}
