@@ -10,6 +10,12 @@ import { eq, and } from 'drizzle-orm';
 const VALID_RATINGS: RatingLevel[] = ['High', 'Medium', 'Low'];
 const VALID_VISIBILITY: Visibility[] = ['Internal', 'Restricted', 'Cross-Silo'];
 
+// DB rows have positionX/positionY; frontend expects position: {x, y}
+function toFrontend(uc: Record<string, unknown>) {
+  const { positionX, positionY, ...rest } = uc as any;
+  return { ...rest, position: { x: positionX ?? 0, y: positionY ?? 0 } };
+}
+
 // GET /api/workshop/:workshopId/usecases?teamId=...
 export const GET: RequestHandler = async ({ params, url }) => {
   const teamId = url.searchParams.get('teamId') ?? undefined;
@@ -20,7 +26,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
           .where(and(eq(schema.useCases.workshopId, params.workshopId), eq(schema.useCases.teamId, teamId)))
       : await db.select().from(schema.useCases)
           .where(eq(schema.useCases.workshopId, params.workshopId));
-    return json(useCases);
+    return json(useCases.map(toFrontend));
   } else {
     if (!workshops.has(params.workshopId)) throw error(404, 'Workshop not found');
     return json(getWorkshopUseCases(params.workshopId, teamId));
@@ -105,7 +111,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
       tags: [value, viability],
     }).returning();
 
-    return json({ useCase, insight }, { status: 201 });
+    return json({ useCase: toFrontend(useCase), insight }, { status: 201 });
     } catch (err) {
       console.error('[UC POST] DB error:', err);
       throw error(500, `Use case creation failed: ${err instanceof Error ? err.message : String(err)}`);
