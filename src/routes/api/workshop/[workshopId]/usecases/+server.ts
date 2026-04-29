@@ -45,14 +45,17 @@ export const POST: RequestHandler = async ({ params, request }) => {
   if (!VALID_RATINGS.includes(viability)) throw error(400, 'viability must be High, Medium, or Low');
 
   if (isDatabaseEnabled && db) {
+    try {
     // Look up team from breakout_teams
     const teamRows = await db.select().from(schema.breakoutTeams)
       .where(and(eq(schema.breakoutTeams.id, teamId), eq(schema.breakoutTeams.workshopId, params.workshopId)));
+    console.log('[UC POST] team lookup:', teamRows.length, 'rows for teamId:', teamId);
     if (teamRows.length === 0) throw error(400, 'teamId is invalid for this workshop');
 
     // Look up participant from live_participants
     const participantRows = await db.select().from(schema.liveParticipants)
       .where(and(eq(schema.liveParticipants.id, participantId), eq(schema.liveParticipants.workshopId, params.workshopId)));
+    console.log('[UC POST] participant lookup:', participantRows.length, 'rows for participantId:', participantId);
     if (participantRows.length === 0) throw error(400, 'participantId is invalid for this workshop');
 
     const participant = participantRows[0];
@@ -103,6 +106,10 @@ export const POST: RequestHandler = async ({ params, request }) => {
     }).returning();
 
     return json({ useCase, insight }, { status: 201 });
+    } catch (err) {
+      console.error('[UC POST] DB error:', err);
+      throw error(500, `Use case creation failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   } else {
     if (!workshops.has(params.workshopId)) throw error(404, 'Workshop not found');
 
