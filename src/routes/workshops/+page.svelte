@@ -116,91 +116,90 @@
       {#if filtered.length === 0}
         <p class="text-[14px] text-gray-500">No workshops match your search.</p>
       {:else}
-        <div class="grid grid-cols-1 gap-4">
+        <div class="grid grid-cols-2 gap-4">
           {#each filtered as w}
-            <div class="bg-white rounded-lg border border-gray-200 p-6 max-w-2xl" style="box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-              <div class="space-y-5">
-                <div class="flex items-start justify-between">
-                  <div>
-                    <div class="flex items-center gap-3 mb-1">
-                      <h2 class="text-2xl text-gray-900 font-bold">{w.title}</h2>
-                      <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium {statusColor(w.status)}">{statusLabel(w.status)}</span>
-                    </div>
-                    {#if w.focusArea}
-                      <p class="text-[13px] text-gray-500">{w.focusArea}</p>
-                    {/if}
-                  </div>
-                </div>
+            <div class="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-3 hover:shadow-md transition-shadow" style="box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
 
-                <div class="space-y-2.5">
-                  <div class="flex items-center">
-                    <span class="text-[12px] text-gray-500 min-w-[120px]">Participants</span>
-                    <span class="text-[12px] text-gray-700">{w.participantCount} total</span>
-                  </div>
-                  {#if w.status === 'pre'}
-                    <div class="flex items-center">
-                      <span class="text-[12px] text-gray-500 min-w-[120px]">Submissions</span>
-                      <span class="text-[12px] text-gray-700">{w.submittedCount}/{w.contributorCount} submitted</span>
-                    </div>
-                  {/if}
-                  {#if w.objective}
-                    <div class="flex items-start">
-                      <span class="text-[12px] text-gray-500 min-w-[120px]">Objective</span>
-                      <span class="text-[12px] text-gray-700 line-clamp-2">{w.objective}</span>
-                    </div>
+              <!-- Header row -->
+              <div class="flex items-start justify-between">
+                <div class="flex-1 min-w-0 pr-2">
+                  <h2 class="text-[14px] text-gray-900 font-semibold leading-snug mb-0.5 truncate">{w.title}</h2>
+                  {#if w.focusArea}
+                    <p class="text-[11px] text-gray-500 truncate">{w.focusArea}</p>
                   {/if}
                 </div>
+                <span class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold {statusColor(w.status)}">{statusLabel(w.status)}</span>
+              </div>
 
+              <!-- Objective preview -->
+              {#if w.objective}
+                <p class="text-[11px] text-gray-600 line-clamp-2 leading-relaxed">{w.objective}</p>
+              {/if}
+
+              <!-- Stats chips -->
+              <div class="flex flex-wrap gap-1.5">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                  {w.participantCount} participants
+                </span>
                 {#if w.status === 'pre' && w.contributorCount > 0}
-                  <div>
-                    <div class="flex items-center justify-between mb-1">
-                      <span class="text-[11px] text-gray-500">Contributor Progress</span>
-                      <span class="text-[11px] text-gray-700 font-medium">{Math.round((w.submittedCount / w.contributorCount) * 100)}%</span>
-                    </div>
-                    <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div class="h-full bg-[#6B9695] rounded-full" style="width: {Math.round((w.submittedCount / w.contributorCount) * 100)}%"></div>
-                    </div>
-                  </div>
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-[#6B9695]/10 text-[#5A8584] border border-[#6B9695]/20 font-medium">
+                    {w.submittedCount}/{w.contributorCount} submitted
+                  </span>
                 {/if}
+              </div>
 
-                <div class="border-t border-gray-100 pt-5 flex items-center gap-2.5">
-                  {#if isFacilitator}
-                    <a href="/workshops/{w.id}/pre"
-                      class="px-4 py-2 bg-[#6B9695] hover:bg-[#5D8685] text-white rounded-md transition-colors text-[13px] font-medium">
-                      Manage Pre-Workshop
-                    </a>
-                    {#if w.status === 'live'}
-                      <a href="/workshop/{w.id}/live"
-                        class="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-md transition-colors text-[13px] font-medium">
-                        Enter Live Workshop
-                      </a>
-                    {:else if w.status === 'completed'}
-                      <a href="/workshops/{w.id}/post"
-                        class="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-md transition-colors text-[13px] font-medium">
-                        View Results
-                      </a>
-                    {/if}
-                  {:else}
-                    {#if w.status === 'pre'}
-                      <a href="/workshops/{w.id}/contributor"
-                        class="px-4 py-2 bg-[#6B9695] hover:bg-[#5D8685] text-white rounded-md transition-colors text-[13px] font-medium">
-                        Submit My Input
-                      </a>
-                    {:else if w.status === 'live'}
-                      <a href="/workshop/{w.id}/live"
-                        class="px-4 py-2 bg-[#6B9695] hover:bg-[#5D8685] text-white rounded-md transition-colors text-[13px] font-medium">
-                        Join Live Workshop
-                      </a>
-                    {:else if w.status === 'completed'}
-                      <a href="/workshops/{w.id}/post/contributor"
-                        class="px-4 py-2 bg-[#6B9695] hover:bg-[#5D8685] text-white rounded-md transition-colors text-[13px] font-medium">
-                        View Results
-                      </a>
-                    {:else}
-                      <span class="text-[13px] text-gray-400 italic">Workshop not yet open</span>
-                    {/if}
-                  {/if}
+              <!-- Progress bar (pre-workshop only) -->
+              {#if w.status === 'pre' && w.contributorCount > 0}
+                <div>
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-[10px] text-gray-400">Submissions</span>
+                    <span class="text-[10px] text-gray-600 font-medium">{Math.round((w.submittedCount / w.contributorCount) * 100)}%</span>
+                  </div>
+                  <div class="h-1 bg-gray-100 rounded-full overflow-hidden">
+                    <div class="h-full bg-[#6B9695] rounded-full transition-all" style="width: {Math.round((w.submittedCount / w.contributorCount) * 100)}%"></div>
+                  </div>
                 </div>
+              {/if}
+
+              <!-- Action buttons -->
+              <div class="border-t border-gray-100 pt-3 mt-auto flex items-center gap-2">
+                {#if isFacilitator}
+                  <a href="/workshops/{w.id}/pre"
+                    class="flex-1 text-center py-1.5 bg-[#6B9695] hover:bg-[#5D8685] text-white rounded-lg transition-colors text-[12px] font-medium">
+                    Manage
+                  </a>
+                  {#if w.status === 'live'}
+                    <a href="/workshop/{w.id}/live"
+                      class="flex-1 text-center py-1.5 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-[12px] font-medium">
+                      Go Live
+                    </a>
+                  {:else if w.status === 'completed'}
+                    <a href="/workshops/{w.id}/post"
+                      class="flex-1 text-center py-1.5 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-[12px] font-medium">
+                      Results
+                    </a>
+                  {/if}
+                {:else}
+                  {#if w.status === 'pre'}
+                    <a href="/workshops/{w.id}/contributor"
+                      class="flex-1 text-center py-1.5 bg-[#6B9695] hover:bg-[#5D8685] text-white rounded-lg transition-colors text-[12px] font-medium">
+                      Submit Input
+                    </a>
+                  {:else if w.status === 'live'}
+                    <a href="/workshop/{w.id}/live"
+                      class="flex-1 text-center py-1.5 bg-[#6B9695] hover:bg-[#5D8685] text-white rounded-lg transition-colors text-[12px] font-medium">
+                      Join Live
+                    </a>
+                  {:else if w.status === 'completed'}
+                    <a href="/workshops/{w.id}/post/contributor"
+                      class="flex-1 text-center py-1.5 bg-[#6B9695] hover:bg-[#5D8685] text-white rounded-lg transition-colors text-[12px] font-medium">
+                      View Results
+                    </a>
+                  {:else}
+                    <span class="text-[12px] text-gray-400 italic">Not yet open</span>
+                  {/if}
+                {/if}
               </div>
             </div>
           {/each}

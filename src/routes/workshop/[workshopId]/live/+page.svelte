@@ -1174,14 +1174,15 @@
             ? voronoiRegions.find(r => r.useCaseIds.has(card.id))?.id === selectedCluster
             : workshopClusters().find(c => c.teamId === card.teamId)?.id === selectedCluster)}
           {#if inSelectedCluster}
+            {@const isMyCard = me && card.participantId === me.id}
             <div
               onmousedown={(e) => onCardMouseDown(e, card)}
-              class="absolute bg-white rounded-xl border border-gray-200 p-4 w-64 shadow-md hover:shadow-lg group select-none"
+              class="absolute bg-white rounded-xl p-4 w-64 shadow-md hover:shadow-lg group select-none {isMyCard ? 'border-2 border-[#6B9695]' : 'border border-gray-200'}"
               style="
                 left: {cardPos.x}px; top: {cardPos.y}px;
                 cursor: {draggingId === card.id ? 'grabbing' : 'grab'};
                 z-index: {draggingId === card.id ? 20 : 1};
-                box-shadow: {draggingId === card.id ? '0 12px 32px rgba(0,0,0,0.18)' : ''};
+                box-shadow: {draggingId === card.id ? '0 12px 32px rgba(0,0,0,0.18)' : isMyCard ? '0 2px 12px rgba(107,150,149,0.15)' : ''};
                 transition: {draggingId === card.id ? 'none' : 'box-shadow 0.15s'};
               "
             >
@@ -1190,7 +1191,12 @@
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium whitespace-nowrap">
                   {teamName(card.teamId)}
                 </span>
-                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6B9695" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-40"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                <div class="flex items-center gap-1.5">
+                  {#if isMyCard}
+                    <span class="text-[9px] font-semibold text-[#6B9695] bg-[#6B9695]/10 px-1.5 py-0.5 rounded-full">Mine</span>
+                  {/if}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6B9695" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-40"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                </div>
               </div>
 
               <h4 class="text-[13px] text-gray-900 font-semibold mb-1">{card.title}</h4>
