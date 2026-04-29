@@ -178,29 +178,26 @@
       const centroid = polygonCentroid(poly);
       const cardCount = cluster.useCaseIds.length;
 
-      // Use the cell bounding box to spread cards, with padding from the Voronoi edges
-      const PAD = 80;
+      // Bounding box of this Voronoi cell with padding — cards stay strictly inside
+      const PAD = 70;
+      const LABEL_H = 60; // room for the cluster label at top
       const xs = poly.map(p => p.x), ys = poly.map(p => p.y);
       const cellX = Math.min(...xs) + PAD;
-      const cellY = Math.min(...ys) + PAD + 40; // extra top clearance for label
+      const cellY = Math.min(...ys) + PAD + LABEL_H;
       const cellW = Math.max(...xs) - Math.min(...xs) - PAD * 2;
-      const cellH = Math.max(...ys) - Math.min(...ys) - PAD * 2 - 40;
+      const cellH = Math.max(...ys) - Math.min(...ys) - PAD * 2 - LABEL_H;
 
-      const cols = Math.min(Math.max(1, Math.floor(cellW / (CARD_W + GAP))), Math.max(1, Math.ceil(Math.sqrt(cardCount))));
-      const rows = Math.ceil(cardCount / cols);
+      // Cols = how many cards fit side-by-side in the cell width
+      const cols = Math.max(1, Math.floor(cellW / (CARD_W + GAP)));
 
-      // Center the grid within the cell
-      const gridW = cols * CARD_W + (cols - 1) * GAP;
-      const gridH = rows * CARD_H + (rows - 1) * GAP;
-      const startX = centroid.x - gridW / 2;
-      const startY = centroid.y - gridH / 2 + 30;
-
+      // Place cards starting from cell top-left — no centering, no clamping
+      // This guarantees cards from different clusters never share the same space
       cluster.useCaseIds.forEach((id, idx) => {
         const col = idx % cols;
         const row = Math.floor(idx / cols);
         pos[id] = {
-          x: Math.max(cellX, Math.min(CANVAS_W - CARD_W - PAD, startX + col * (CARD_W + GAP))),
-          y: Math.max(cellY, Math.min(CANVAS_H - CARD_H - PAD, startY + row * (CARD_H + GAP))),
+          x: cellX + col * (CARD_W + GAP),
+          y: cellY + row * (CARD_H + GAP),
         };
       });
 
@@ -303,8 +300,13 @@
         message: text,
         history: aiMessages.slice(0, -1),
       };
-      // Pass useCaseId when in a card-specific session
-      if (activeSessionId !== 'new') body.useCaseId = activeSessionId;
+      // Card-specific sessions pass the card ID
+      if (activeSessionId !== 'new') {
+        body.useCaseId = activeSessionId;
+      } else if (!aiCreationMode) {
+        // General right-panel chat — use the rich workshop overview prompt
+        body.mode = 'workshop';
+      }
 
       const res = await fetch(`/api/workshop/${workshopId}/ai`, {
         method: 'POST',
@@ -1115,7 +1117,7 @@
       onmouseup={onCanvasMouseUp}
       onmouseleave={onCanvasMouseUp}
       class="flex-1 relative overflow-hidden"
-      style="background-color: #FAFAF9; background-image: linear-gradient(rgba(0,0,0,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.02) 1px, transparent 1px); background-size: 40px 40px; cursor: {draggingId || panning ? 'grabbing' : 'grab'};"
+      style="background-color: #FAFAF9; background-image: linear-gradient(rgba(0,0,0,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.02) 1px, transparent 1px); background-size: 40px 40px; background-position: {pan.x}px {pan.y}px; cursor: {draggingId || panning ? 'grabbing' : 'grab'};"
     >
       <!-- Sidebar toggle -->
       <button onclick={() => isNavCollapsed = !isNavCollapsed}
@@ -1354,7 +1356,7 @@
               {:else if aiCreationMode}
                 Creating use case...
               {:else}
-                Analyzing {teamFilter === 'Mine' ? 'your workspace' : teamFilter === 'All Teams' ? 'all workspaces' : `${teamFilter} workspace`}...
+                Workshop Intelligence · {cards.length} use case{cards.length !== 1 ? 's' : ''}
               {/if}
             </p>
           </div>
