@@ -3,12 +3,11 @@ import type { RequestHandler } from './$types';
 import { randomUUID } from 'crypto';
 import { db, isDatabaseEnabled } from '$lib/db/index.js';
 import { workshops, teams, participants, getWorkshopUseCases, createUseCase } from '$lib/workshop/store.js';
-import type { RatingLevel, Visibility } from '$lib/workshop/types.js';
+import type { RatingLevel } from '$lib/workshop/types.js';
 import * as schema from '$lib/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 
 const VALID_RATINGS: RatingLevel[] = ['High', 'Medium', 'Low'];
-const VALID_VISIBILITY: Visibility[] = ['Internal', 'Restricted', 'Cross-Silo'];
 
 // DB rows have positionX/positionY; frontend expects position: {x, y}
 function toFrontend(uc: Record<string, unknown>) {
@@ -39,7 +38,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
   if (!body) throw error(400, 'Invalid JSON body');
 
   const {
-    title, summary, value, viability, visibility = 'Internal',
+    title, summary, value, viability,
     teamId, participantId, position, collaborators, context,
     pillarTags, problemStatement, solutionOverview, businessUnits,
     timeline, costs, legalCompliance
@@ -79,7 +78,6 @@ export const POST: RequestHandler = async ({ params, request }) => {
       context: context ?? '',
       value,
       viability,
-      visibility: VALID_VISIBILITY.includes(visibility) ? visibility : 'Internal',
       addedBy: participant.name,
       upvotes: 0,
       upvotedBy: [],
@@ -105,7 +103,6 @@ export const POST: RequestHandler = async ({ params, request }) => {
       summary: summary.trim(),
       value,
       viability,
-      visibility: VALID_VISIBILITY.includes(visibility) ? visibility : 'Internal',
       addedBy: participant.name,
       upvotes: 0,
       tags: [value, viability],
