@@ -30,7 +30,13 @@ export const GET: RequestHandler = async ({ params }) => {
 
       const useCaseCount = useCaseCountResult[0].count;
 
-      return json({ workshop, teams: workshopTeams, participants: workshopParticipants, useCaseCount });
+      // Populate memberIds from live_participants for each team
+      const teamsWithMembers = workshopTeams.map(t => ({
+        ...t,
+        memberIds: workshopParticipants.filter(p => p.teamId === t.id).map(p => p.id),
+      }));
+
+      return json({ workshop, teams: teamsWithMembers, participants: workshopParticipants, useCaseCount });
     }
     // Workshop not in DB — fall through to in-memory store
   }

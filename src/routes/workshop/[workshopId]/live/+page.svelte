@@ -551,7 +551,7 @@
 
   // Breakout team lookup for a participant
   const teamForParticipant = (participantId: string) =>
-    teams.find(t => t.memberIds.includes(participantId));
+    teams.find(t => (t.memberIds ?? []).includes(participantId));
 
   const teamName = (teamId: string) =>
     teams.find(t => t.id === teamId)?.name ?? '';
@@ -756,7 +756,7 @@
   const collaboratorsLabel = $derived(() => {
     const t = teams.find(t => t.name === teamFilter);
     if (!t) return 'Your personal workspace';
-    const names = t.memberIds.map(id => participants.find(p => p.id === id)?.name?.split(' ')[0]).filter(Boolean);
+    const names = (t.memberIds ?? []).map((id: string) => participants.find(p => p.id === id)?.name?.split(' ')[0]).filter(Boolean);
     return `Active collaborators: ${names.join(', ')}`;
   });
 
@@ -966,10 +966,10 @@
               <div class="bg-gray-50 rounded-lg p-3">
                 <div class="flex items-center justify-between mb-2">
                   <span class="text-[12px] text-gray-900 font-semibold">{team.name}</span>
-                  <span class="text-[10px] text-green-600 font-medium">● {team.memberIds.length} Active</span>
+                  <span class="text-[10px] text-green-600 font-medium">● {(team.memberIds ?? []).length} Active</span>
                 </div>
                 <div class="space-y-1">
-                  {#each team.memberIds as pid}
+                  {#each (team.memberIds ?? []) as pid}
                     {@const p = participants.find(p => p.id === pid)}
                     {#if p}
                       <p class="text-[11px] text-gray-600 flex items-center gap-1.5">
@@ -1590,7 +1590,7 @@
             class="w-full flex items-center justify-between px-4 py-3 border-2 border-gray-200 hover:border-[#6B9695] hover:bg-[#F0F9F9] rounded-xl transition-colors text-left disabled:opacity-50">
             <div>
               <p class="text-[14px] font-semibold text-gray-900">{team.name}</p>
-              <p class="text-[11px] text-gray-500">{team.memberIds.length} member{team.memberIds.length !== 1 ? 's' : ''}</p>
+              <p class="text-[11px] text-gray-500">{(team.memberIds ?? []).length} member{(team.memberIds ?? []).length !== 1 ? 's' : ''}</p>
             </div>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B9695" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
