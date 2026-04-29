@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { PageData } from './$types';
   import jsPDF from 'jspdf';
+  import { onMount, onDestroy } from 'svelte';
 
   let { data }: { data: PageData } = $props();
 
@@ -50,6 +51,31 @@
       ? Math.round((stats.submittedCount / stats.contributorCount) * 100)
       : 0
   );
+
+  async function refreshData() {
+    try {
+      const res = await fetch(`/api/workshops/${workshop.id}`);
+      if (!res.ok) return;
+      const d = await res.json();
+      participants = d.participants ?? participants;
+      activityLog = d.activityLog ?? activityLog;
+      // Recompute stats
+      const contributors = (d.participants ?? []).filter((p: any) => p.role === 'contributor');
+      const submitted = (d.inputs ?? []).filter((i: any) => i.status === 'completed').length;
+      stats = {
+        ...stats,
+        participantCount: (d.participants ?? []).length,
+        contributorCount: contributors.length,
+        submittedCount: submitted,
+      };
+    } catch {}
+  }
+
+  let pollTimer: ReturnType<typeof setInterval>;
+  onMount(() => {
+    pollTimer = setInterval(refreshData, 5000);
+  });
+  onDestroy(() => clearInterval(pollTimer));
 
   const roleBadgeColor = (role: string) => {
     if (role === 'facilitator') return 'bg-blue-100 text-blue-700';
