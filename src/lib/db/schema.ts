@@ -105,6 +105,7 @@ export const insights = pgTable('insights', {
   summary: text('summary').notNull(),
   value: text('value').notNull(),
   viability: text('viability').notNull(),
+  visibility: text('visibility').notNull().default('Internal'),
   addedBy: text('added_by').notNull(),
   upvotes: integer('upvotes').notNull().default(0),
   tags: text('tags').array().notNull().default([]),
@@ -127,6 +128,7 @@ export const useCases = pgTable('use_cases', {
   context: text('context').default(''),
   value: text('value').notNull(),
   viability: text('viability').notNull(),
+  visibility: text('visibility').notNull().default('Internal'),
   addedBy: text('added_by').notNull(),
   participantId: text('participant_id')
     .notNull()
