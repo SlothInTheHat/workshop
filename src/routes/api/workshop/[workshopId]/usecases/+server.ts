@@ -68,6 +68,21 @@ export const POST: RequestHandler = async ({ params, request }) => {
     const insightId = randomUUID();
     const pos = position && typeof position.x === 'number' ? position : { x: Math.floor(Math.random() * 600), y: Math.floor(Math.random() * 400) };
 
+    // Insert insight first (use_cases.insight_id FK references insights.id)
+    const [insight] = await db.insert(schema.insights).values({
+      id: insightId,
+      workshopId: params.workshopId,
+      useCaseId,
+      teamId,
+      title: title.trim(),
+      summary: summary.trim(),
+      value,
+      viability,
+      addedBy: participant.name,
+      upvotes: 0,
+      tags: [value, viability],
+    }).returning();
+
     const [useCase] = await db.insert(schema.useCases).values({
       id: useCaseId,
       workshopId: params.workshopId,
@@ -92,20 +107,6 @@ export const POST: RequestHandler = async ({ params, request }) => {
       timeline: typeof timeline === 'string' ? timeline : null,
       costs: typeof costs === 'string' ? costs : null,
       legalCompliance: typeof legalCompliance === 'string' ? legalCompliance : null,
-    }).returning();
-
-    const [insight] = await db.insert(schema.insights).values({
-      id: insightId,
-      workshopId: params.workshopId,
-      useCaseId,
-      teamId,
-      title: title.trim(),
-      summary: summary.trim(),
-      value,
-      viability,
-      addedBy: participant.name,
-      upvotes: 0,
-      tags: [value, viability],
     }).returning();
 
     return json({ useCase: toFrontend(useCase), insight }, { status: 201 });
