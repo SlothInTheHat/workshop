@@ -194,19 +194,7 @@ Return ONLY valid JSON in this exact structure:
         })
         .returning();
 
-      // Update each use case with its whyItMatters insight
-      if (parsedContent.perUseCaseInsights && Array.isArray(parsedContent.perUseCaseInsights)) {
-        // console.log('[SUMMARY] Updating use cases with whyItMatters insights');
-        for (const insight of parsedContent.perUseCaseInsights) {
-          if (insight.useCaseId && insight.whyItMatters) {
-            await db
-              .update(schema.useCases)
-              .set({ whyItMatters: insight.whyItMatters })
-              .where(eq(schema.useCases.id, insight.useCaseId));
-            // console.log(`[SUMMARY] Updated use case ${insight.useCaseId} with whyItMatters`);
-          }
-        }
-      }
+      // whyItMatters updates skipped — column not in current schema
 
       // console.log('[SUMMARY] Summary saved successfully:', summary.id);
       return json(summary);

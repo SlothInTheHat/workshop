@@ -3,11 +3,25 @@ import { join } from 'path';
 
 const DATA_FILE = join(process.cwd(), 'workshop-data.json');
 
+// Skip file persistence on read-only filesystems (e.g. Vercel)
+function isWritable(): boolean {
+  try {
+    writeFileSync(DATA_FILE + '.test', '');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+let _canWrite: boolean | null = null;
+
 export function saveToFile(data: object) {
+  if (_canWrite === null) _canWrite = isWritable();
+  if (!_canWrite) return;
   try {
     writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-  } catch (err) {
-    console.error('[Persist] Failed to save:', err);
+  } catch {
+    _canWrite = false;
   }
 }
 
