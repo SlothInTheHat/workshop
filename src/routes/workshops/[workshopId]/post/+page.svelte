@@ -27,6 +27,7 @@
   let useCases = $state(data.useCases || []);
   let stackRank = $state(data.stackRank || []);
   let workshop = $state(data.workshop);
+  const isFacilitator = data.isFacilitator ?? false;
   let totalParticipants = $state(0);
 
   const workshopId = $page.params.workshopId;
@@ -703,8 +704,8 @@
 
       <!-- Round 2 Tab -->
       <button
-        onclick={() => votingStatus.allFinished && (activePhase = 'round2')}
-        disabled={!votingStatus.allFinished}
+        onclick={async () => { if (votingStatus.allFinished || isFacilitator) { activePhase = 'round2'; await loadStackRank(); } }}
+        disabled={!votingStatus.allFinished && !isFacilitator}
         class={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-md transition-all ${
           activePhase === 'round2'
             ? 'bg-[#6B9695] text-white shadow-sm'
@@ -729,8 +730,8 @@
 
       <!-- Executive Summary Tab -->
       <button
-        onclick={() => votingStatus.allFinished && (activePhase = 'final')}
-        disabled={!votingStatus.allFinished}
+        onclick={() => { if (votingStatus.allFinished || isFacilitator) activePhase = 'final'; }}
+        disabled={!votingStatus.allFinished && !isFacilitator}
         class={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-md transition-all ${
           activePhase === 'final'
             ? 'bg-[#6B9695] text-white shadow-sm'
@@ -780,6 +781,18 @@
         >
           Votes are hidden until all participants finish voting.
         </p>
+        {#if isFacilitator}
+          <button
+            onclick={async () => {
+              activePhase = 'round2';
+              await loadStackRank();
+              if (pollInterval) clearInterval(pollInterval);
+            }}
+            class="mt-3 px-4 py-2 bg-[#6B9695] text-white rounded-lg text-[12px] font-medium hover:bg-[#5A8584] transition-colors"
+          >
+            Skip to Results →
+          </button>
+        {/if}
       </div>
     {/if}
 

@@ -1,7 +1,8 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
+import { getSession } from '$lib/session';
 
-export const load: PageServerLoad = async ({ params, fetch }) => {
+export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
   const workshopId = params.workshopId;
   console.log('[POST-WORKSHOP] Loading for workshopId:', workshopId);
 
@@ -41,12 +42,15 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
       console.error('Failed to load existing summary:', err);
     }
 
+    const session = getSession(cookies);
+
     return {
       workshop: workshopData.workshop,
       teams,
       useCases,
       stackRank,
       existingSummary,
+      isFacilitator: session?.role === 'facilitator',
     };
   } catch (err) {
     console.error('Failed to load workshop data:', err);
