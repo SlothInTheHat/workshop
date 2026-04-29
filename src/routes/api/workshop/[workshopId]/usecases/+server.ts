@@ -109,9 +109,10 @@ export const POST: RequestHandler = async ({ params, request }) => {
     }).returning();
 
     return json({ useCase: toFrontend(useCase), insight }, { status: 201 });
-    } catch (err) {
+    } catch (err: any) {
+      const cause = err?.cause?.message ?? err?.cause ?? '';
       console.error('[UC POST] DB error:', err);
-      throw error(500, `Use case creation failed: ${err instanceof Error ? err.message : String(err)}`);
+      throw error(500, `Use case creation failed: ${err instanceof Error ? err.message : String(err)} | cause: ${cause}`);
     }
   } else {
     if (!workshops.has(params.workshopId)) throw error(404, 'Workshop not found');
