@@ -599,37 +599,18 @@
     return t ? cards.filter(c => c.teamId === t.id) : cards;
   });
 
-  // Cluster definitions computed from teams
-  const workshopClusters = $derived(() => {
-    const colors = [
-      { color: 'rgba(107,150,149,0.08)', borderColor: 'rgba(107,150,149,0.3)', labelColor: '#6B9695' },
-      { color: 'rgba(99,179,135,0.08)', borderColor: 'rgba(99,179,135,0.3)', labelColor: '#38A169' },
-      { color: 'rgba(99,122,179,0.08)', borderColor: 'rgba(99,122,179,0.3)', labelColor: '#5A6FBA' },
-    ];
-    // Group cards by teamId
-    const byTeam = new Map<string, UseCase[]>();
-    cards.forEach(c => {
-      if (!byTeam.has(c.teamId)) byTeam.set(c.teamId, []);
-      byTeam.get(c.teamId)!.push(c);
-    });
-    return teams.map((team, i) => {
-      const teamCards = byTeam.get(team.id) ?? [];
-      const xs = teamCards.map(c => c.position.x);
-      const ys = teamCards.map(c => c.position.y);
-      const minX = xs.length ? Math.min(...xs) - 30 : i * 400;
-      const minY = ys.length ? Math.min(...ys) - 50 : 30;
-      const maxX = xs.length ? Math.max(...xs) + 280 : minX + 500;
-      const maxY = ys.length ? Math.max(...ys) + 200 : minY + 280;
-      return {
-        id: i + 1,
-        teamId: team.id,
-        label: team.name,
-        count: teamCards.length,
-        ...colors[i % colors.length],
-        rect: { x: minX, y: minY, w: maxX - minX, h: maxY - minY },
+  // Simple grid positions for workshop-wide view while AI clusters are loading
+  function workshopGridPositions(): Record<string, { x: number; y: number }> {
+    const pos: Record<string, { x: number; y: number }> = {};
+    const cols = Math.max(1, Math.floor((CANVAS_W - 120) / (CARD_W + GAP)));
+    cards.forEach((card, idx) => {
+      pos[card.id] = {
+        x: 60 + (idx % cols) * (CARD_W + GAP),
+        y: 60 + Math.floor(idx / cols) * (CARD_H + GAP),
       };
     });
-  });
+    return pos;
+  }
 
   // ── Drag ──────────────────────────────────────────────────────────────────────
 
@@ -1191,33 +1172,16 @@
             {/if}
           {/each}
 
-        {:else if viewMode === 'workshop-wide' && !aiClusterLoading}
-          <!-- Fallback: team-based rectangular clusters while loading -->
-          {#each workshopClusters() as cluster}
-            <div
-              class="absolute rounded-2xl transition-all duration-200 cursor-pointer"
-              style="left:{cluster.rect.x}px;top:{cluster.rect.y}px;width:{cluster.rect.w}px;height:{cluster.rect.h}px;background:{selectedCluster === cluster.id ? cluster.color.replace('0.08','0.14') : cluster.color};border:1.5px dashed {cluster.borderColor};opacity:{selectedCluster !== null && selectedCluster !== cluster.id ? 0.3 : 1};"
-              role="button" tabindex="0"
-              onclick={() => selectedCluster = selectedCluster === cluster.id ? null : cluster.id}
-              onkeydown={(e) => e.key === 'Enter' && (selectedCluster = selectedCluster === cluster.id ? null : cluster.id)}
-            >
-              <div class="absolute -top-5 left-3">
-                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold"
-                  style="background:{selectedCluster === cluster.id ? cluster.labelColor : 'white'};color:{selectedCluster === cluster.id ? 'white' : cluster.labelColor};border:1.5px solid {cluster.borderColor};box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-                  {cluster.label}
-                  <span class="text-[9px] px-1 rounded-full" style="background:rgba(255,255,255,0.25);">{cluster.count}</span>
-                </span>
-              </div>
-            </div>
-          {/each}
         {/if}
 
         <!-- Use case cards -->
         {#each visibleCards() as card (card.id)}
-          {@const cardPos = (viewMode === 'workshop-wide' && clusteredCardPositions[card.id]) ? clusteredCardPositions[card.id] : card.position}
+          {@const cardPos = viewMode === 'workshop-wide'
+            ? (clusteredCardPositions[card.id] ?? workshopGridPositions()[card.id] ?? card.position)
+            : card.position}
           {@const inSelectedCluster = selectedCluster === null || (viewMode === 'workshop-wide' && voronoiRegions.length > 0
             ? voronoiRegions.find(r => r.useCaseIds.has(card.id))?.id === selectedCluster
-            : workshopClusters().find(c => c.teamId === card.teamId)?.id === selectedCluster)}
+            : true)}
           {#if inSelectedCluster}
             {@const isMyCard = me && card.participantId === me.id}
             <div
