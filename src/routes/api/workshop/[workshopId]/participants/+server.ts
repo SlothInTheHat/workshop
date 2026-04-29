@@ -52,18 +52,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
         participant = created;
       }
 
-      // Update team memberIds in DB
-      const teamRows = await db.select().from(schema.breakoutTeams)
-        .where(eq(schema.breakoutTeams.id, teamId));
-
-      if (teamRows.length > 0) {
-        const currentMembers: string[] = (teamRows[0].memberIds as string[]) ?? [];
-        if (!currentMembers.includes(participant.id)) {
-          await db.update(schema.breakoutTeams)
-            .set({ memberIds: [...currentMembers, participant.id] })
-            .where(eq(schema.breakoutTeams.id, teamId));
-        }
-      }
+      // memberIds are derived from live_participants — no update needed on breakout_teams
 
       return json(participant, { status: 201 });
     } catch (err) {

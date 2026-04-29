@@ -59,7 +59,6 @@ export const breakoutTeams = pgTable('breakout_teams', {
     .notNull()
     .references(() => workshops.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
-  memberIds: jsonb('member_ids').$type<string[]>().default([]),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

@@ -129,42 +129,42 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 				console.log('[Launch] Pre-workshop data copied to live workshop');
 
 				// Ensure a live workshops record exists for the overview API
-				try {
+				const existingLive = await db.select().from(schema.workshops)
+					.where(eq(schema.workshops.id, params.id)).limit(1);
+				if (existingLive.length === 0) {
+					// Use a unique joinCode: prefer facilitatorCode, fall back to timestamp
+					const joinCode = w.facilitatorCode ?? `live-${params.id}`;
 					await db.insert(schema.workshops).values({
 						id: params.id,
 						title: w.title,
 						client: w.tenantId ?? 'default',
 						status: 'setup',
-						joinCode: w.facilitatorCode ?? params.id,
+						joinCode,
 						createdAt: new Date(),
-					});
-				} catch {
-					// Already exists — update status
-					await db.update(schema.workshops)
-						.set({ status: 'setup' })
-						.where(eq(schema.workshops.id, params.id));
+					}).onConflictDoNothing();
 				}
 
-				// Create teams in DB (persists across serverless instances)
-				const preTeams = (w.teams ?? []) as { name: string }[];
-				const teamsToCreate = preTeams.length > 0 ? preTeams : [{ name: 'Team A' }, { name: 'Team B' }];
+				// Create teams in DB — only if none exist yet for this workshop
+				const existingTeams = await db.select().from(schema.breakoutTeams)
+					.where(eq(schema.breakoutTeams.workshopId, params.id));
 
-				for (const team of teamsToCreate) {
-					const teamId = crypto.randomUUID();
-					try {
+				if (existingTeams.length === 0) {
+					const preTeams = (w.teams ?? []) as { name: string }[];
+					const teamsToCreate = preTeams.length > 0 ? preTeams : [{ name: 'Team A' }, { name: 'Team B' }];
+
+					for (const team of teamsToCreate) {
+						const teamId = crypto.randomUUID();
 						await db.insert(schema.breakoutTeams).values({
 							id: teamId,
 							workshopId: params.id,
 							name: team.name,
-							memberIds: [],
 							createdAt: new Date(),
-						});
-						// Also create in memory for SSE broadcast
+						}).onConflictDoNothing();
 						createTeam(params.id, team.name, []);
-					} catch {
-						// team may already exist
+						console.log('[Launch] Created team in DB:', team.name);
 					}
-					console.log('[Launch] Created team in DB:', team.name);
+				} else {
+					console.log('[Launch] Teams already exist in DB:', existingTeams.length);
 				}
 			}
 		} catch (err) {
