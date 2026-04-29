@@ -787,11 +787,41 @@
     window.location.href = `/workshops/${workshopId}/post`;
   }
 
-  // ── SSE ───────────────────────────────────────────────────────────────────────
+  // ── Real-time polling + SSE ──────────────────────────────────────────────────
 
-  let statusPollInterval: ReturnType<typeof setInterval>;
+  let pollInterval: ReturnType<typeof setInterval>;
+
+  async function pollData() {
+    try {
+      // Refresh use cases
+      const ucRes = await fetch(`/api/workshop/${workshopId}/usecases`);
+      if (ucRes.ok) {
+        const freshCards = await ucRes.json();
+        // Merge: add new cards, update existing, preserve positions of cards being dragged
+        const mergedCards = freshCards.map((fresh: any) => {
+          const existing = cards.find(c => c.id === fresh.id);
+          return existing ?? fresh;
+        });
+        // Add any new cards not already present
+        cards = mergedCards;
+      }
+
+      // Refresh participants, teams, and workshop status
+      const ovRes = await fetch(`/api/workshop/${workshopId}`);
+      if (ovRes.ok) {
+        const overview = await ovRes.json();
+        participants = overview.participants ?? participants;
+        teams = overview.teams ?? teams;
+        if (overview.workshop?.status === 'summary' || overview.workshop?.status === 'completed') {
+          clearInterval(pollInterval);
+          window.location.href = `/workshops/${workshopId}/post`;
+        }
+      }
+    } catch {}
+  }
 
   onMount(() => {
+    // SSE for immediate local broadcasts (when on same serverless instance)
     eventSource = new EventSource(`/api/workshop/${workshopId}/stream`);
     eventSource.onmessage = (e) => {
       try {
@@ -800,27 +830,13 @@
       } catch {}
     };
 
-    // Poll workshop status every 3 seconds to detect when facilitator completes workshop
-    statusPollInterval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/workshop/${workshopId}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.workshop?.status === 'summary' ||
-              data.workshop?.status === 'completed') {
-            clearInterval(statusPollInterval);
-            window.location.href = `/workshops/${workshopId}/post`;
-          }
-        }
-      } catch (err) {
-        console.error('[Poll] Status check failed:', err);
-      }
-    }, 3000);
+    // Polling as the reliable cross-instance real-time mechanism
+    pollInterval = setInterval(pollData, 4000);
   });
 
   onDestroy(() => {
     eventSource?.close();
-    if (statusPollInterval) clearInterval(statusPollInterval);
+    if (pollInterval) clearInterval(pollInterval);
   });
 
   function handleSSEEvent(event: WorkshopEvent) {

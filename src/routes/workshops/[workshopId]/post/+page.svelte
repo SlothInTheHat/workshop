@@ -53,11 +53,12 @@
     await loadWorkshopData();
     await loadVotingStatus();
 
-    // Start polling voting status for all participants
-    // This ensures everyone sees the transition when anyone finishes voting
+    // Poll voting status, use cases, and workshop data every 4 seconds
     pollInterval = setInterval(async () => {
       await loadVotingStatus();
-    }, 3000);
+      await loadUseCases();
+      await loadWorkshopData();
+    }, 4000);
 
     return () => {
       if (pollInterval) clearInterval(pollInterval);
